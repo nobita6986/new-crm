@@ -7,7 +7,7 @@
 # runtime image, and exports dependency locks + image provenance metadata.
 #
 # Usage (local / isolated CI):
-#   bash deploy/images/build-image.sh [--out-dir deploy/images/evidence] [--tag crm-cskh:0.0.1-92e14af]
+#   bash deploy/images/build-image.sh [--out-dir deploy/images/evidence] [--tag crm-cskh:0.0.1-4672041]
 #
 # Optional registry push (for P4-02 when an approved registry + credentials exist):
 #   REGISTRY_PUSH=true CSKH_REGISTRY_IMAGE=ghcr.io/<org>/crm-cskh bash deploy/images/build-image.sh
@@ -121,6 +121,22 @@ print(lock["toolchain"]["uv_version"])
 print(py_constraints["system_constraints_sha256"])
 print(py_constraints["bench_constraints_sha256"])
 print(lock["security_patches"]["frappe_form_data_version"])
+print(lock["security_patches"]["pyjwt_version"])
+print(lock["security_patches"]["pillow_version"])
+print(lock["security_patches"]["mariadb_client_debian_version"])
+
+cskh_lock = lock["apps"]["crm_cskh"]
+if cskh_lock.get("apps_tree_sha") != lock["apps_tree_sha"]:
+    raise SystemExit("ERROR: release-lock.json apps.crm_cskh.apps_tree_sha != apps_tree_sha")
+if cskh_lock.get("crm_cskh_tree_sha") != lock["crm_cskh_tree_sha"]:
+    raise SystemExit("ERROR: release-lock.json apps.crm_cskh.crm_cskh_tree_sha != crm_cskh_tree_sha")
+
+mdb_sha = lock["security_patches"]["mariadb_client_amd64_sha256"]
+for pkg_key in ("mariadb-common", "libmariadb3", "mariadb-client-core", "mariadb-client", "libmariadb-dev"):
+    val = str(mdb_sha.get(pkg_key) or "").strip()
+    if len(val) != 64 or any(ch not in "0123456789abcdef" for ch in val):
+        raise SystemExit(f"ERROR: Invalid SHA-256 for {pkg_key} in release-lock.json: {val!r}")
+    print(val)
 PY
 )
 
@@ -152,6 +168,14 @@ UV_VERSION="${LOCK_VARS[24]}"
 SYSTEM_PYTHON_CONSTRAINTS_SHA256="${LOCK_VARS[25]}"
 BENCH_PYTHON_CONSTRAINTS_SHA256="${LOCK_VARS[26]}"
 FORM_DATA_PATCH_VERSION="${LOCK_VARS[27]}"
+PYJWT_PATCH_VERSION="${LOCK_VARS[28]}"
+PILLOW_PATCH_VERSION="${LOCK_VARS[29]}"
+MARIADB_DEB_VERSION="${LOCK_VARS[30]}"
+MARIADB_COMMON_DEB_SHA256="${LOCK_VARS[31]}"
+LIBMARIADB3_AMD64_DEB_SHA256="${LOCK_VARS[32]}"
+MARIADB_CLIENT_CORE_AMD64_DEB_SHA256="${LOCK_VARS[33]}"
+MARIADB_CLIENT_AMD64_DEB_SHA256="${LOCK_VARS[34]}"
+LIBMARIADB_DEV_AMD64_DEB_SHA256="${LOCK_VARS[35]}"
 
 ACTUAL_HEAD_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD | tr -d '\r')"
 ACTUAL_APPS_TREE_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD:apps | tr -d '\r')"
@@ -204,10 +228,18 @@ docker buildx build \
   --build-arg "SYSTEM_PYTHON_CONSTRAINTS_SHA256=${SYSTEM_PYTHON_CONSTRAINTS_SHA256}" \
   --build-arg "BENCH_PYTHON_CONSTRAINTS_SHA256=${BENCH_PYTHON_CONSTRAINTS_SHA256}" \
   --build-arg "FORM_DATA_PATCH_VERSION=${FORM_DATA_PATCH_VERSION}" \
+  --build-arg "PYJWT_PATCH_VERSION=${PYJWT_PATCH_VERSION}" \
+  --build-arg "PILLOW_PATCH_VERSION=${PILLOW_PATCH_VERSION}" \
   --build-arg "WKHTMLTOPDF_VERSION=${WKHTMLTOPDF_VERSION}" \
   --build-arg "WKHTMLTOPDF_DISTRO=${WKHTMLTOPDF_DISTRO}" \
   --build-arg "WKHTMLTOPDF_AMD64_SHA256=${WKHTMLTOPDF_AMD64_SHA256}" \
   --build-arg "INSTALL_CHROMIUM=${INSTALL_CHROMIUM}" \
+  --build-arg "MARIADB_DEB_VERSION=${MARIADB_DEB_VERSION}" \
+  --build-arg "MARIADB_COMMON_DEB_SHA256=${MARIADB_COMMON_DEB_SHA256}" \
+  --build-arg "LIBMARIADB3_AMD64_DEB_SHA256=${LIBMARIADB3_AMD64_DEB_SHA256}" \
+  --build-arg "MARIADB_CLIENT_CORE_AMD64_DEB_SHA256=${MARIADB_CLIENT_CORE_AMD64_DEB_SHA256}" \
+  --build-arg "MARIADB_CLIENT_AMD64_DEB_SHA256=${MARIADB_CLIENT_AMD64_DEB_SHA256}" \
+  --build-arg "LIBMARIADB_DEV_AMD64_DEB_SHA256=${LIBMARIADB_DEV_AMD64_DEB_SHA256}" \
   --build-arg "FRAPPE_REPO=${FRAPPE_REPO}" \
   --build-arg "FRAPPE_TAG=${FRAPPE_TAG}" \
   --build-arg "FRAPPE_SHA=${FRAPPE_SHA}" \
@@ -282,6 +314,18 @@ summary = {
         "status": reg_status,
         "approved_registry_repo_digest": reg_digest or None,
         "blocker": reg_blocker or None,
+    },
+    "identifier_taxonomy": {
+        "local_image_id_class": "oci_image_config_sha256",
+        "local_image_id": local_id,
+        "registry_manifest_digest_class": "oci_distribution_manifest_sha256",
+        "registry_manifest_digest": reg_digest or None,
+        "note": (
+            "local_image_id (OCI config JSON SHA-256) and registry_manifest_digest "
+            "(OCI distribution manifest JSON SHA-256) hash different OCI objects of the "
+            "same image and are never equal by specification; only compare same-class "
+            "identifiers across stages, and never compare against unrelated live images."
+        ),
     },
     "compose_handoff": {
         "APP_IMAGE_for_remote_deploy": reg_digest if reg_digest else None,

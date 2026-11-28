@@ -127,7 +127,9 @@ jobs:
             crm_cskh.tests.test_p3_sla_and_attribution \
             crm_cskh.tests.test_p3_kpi_and_snapshots \
             crm_cskh.tests.test_p3_reporting_and_security \
-            crm_cskh.tests.test_p3_t1c_remediation
+            crm_cskh.tests.test_p3_t1c_remediation \
+            crm_cskh.tests.test_p3_g18_drilldown_optimization \
+            crm_cskh.tests.test_p3_pdf_security_and_worker
           do
             slug="${module##*.}"
             container_log="/tmp/p3-evidence/${slug}.log"

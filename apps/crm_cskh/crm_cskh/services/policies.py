@@ -32,6 +32,7 @@ from crm_cskh.p2_permissions import (
 	assert_workflow_actor,
 )
 from crm_cskh.p3_models import DEFAULT_P3_POLICY_FIELDS
+from crm_cskh.services import runtime_cache
 from crm_cskh.services.errors import (
 	IdempotencyConflict,
 	InvalidChannel,
@@ -164,9 +165,9 @@ def _policy_fields() -> list[str]:
 		"allow_leader_reopen",
 		"allow_leader_review_correction",
 	]
-	if frappe.db.table_exists("CSKH Policy"):
+	if runtime_cache.table_exists("CSKH Policy"):
 		for col in ("working_calendar", *_P3_BOOL_POLICY_KEYS, *_P3_INT_POLICY_KEYS):
-			if frappe.db.has_column("CSKH Policy", col):
+			if runtime_cache.has_column("CSKH Policy", col):
 				base.append(col)
 	return base
 
@@ -174,14 +175,22 @@ def _policy_fields() -> list[str]:
 def _resolve_team_policy_along_ancestors(leaf_node: str | None) -> dict | None:
 	if not leaf_node:
 		return None
-	bounds = frappe.db.get_value("CRM Sales Hierarchy", leaf_node, ["lft", "rgt"], as_dict=True)
-	if not bounds:
-		return None
-	ancestor_nodes = frappe.db.sql(
-		"select name from `tabCRM Sales Hierarchy` where lft <= %s and rgt >= %s order by lft desc",
-		(bounds.lft, bounds.rgt),
-		pluck=True,
-	)
+	if runtime_cache.is_runtime_db_cache_active():
+		snap = runtime_cache.get_hierarchy_snapshot()
+		leaf = snap["by_name"].get(str(leaf_node)) if snap else None
+		if not leaf:
+			return None
+		lft, rgt = leaf["lft"], leaf["rgt"]
+		ancestor_nodes = [n["name"] for n in reversed(snap["ordered"]) if n["lft"] <= lft and n["rgt"] >= rgt]
+	else:
+		bounds = frappe.db.get_value("CRM Sales Hierarchy", leaf_node, ["lft", "rgt"], as_dict=True)
+		if not bounds:
+			return None
+		ancestor_nodes = frappe.db.sql(
+			"select name from `tabCRM Sales Hierarchy` where lft <= %s and rgt >= %s order by lft desc",
+			(bounds.lft, bounds.rgt),
+			pluck=True,
+		)
 	for node_name in ancestor_nodes or []:
 		rows = frappe.db.get_all(
 			"CSKH Policy",
@@ -195,19 +204,11 @@ def _resolve_team_policy_along_ancestors(leaf_node: str | None) -> dict | None:
 	return None
 
 
-def resolve_effective_policy(
+def _resolve_effective_policy_uncached(
 	campaign: str | None = None,
-	work_item: str | None = None,
 	owner_user: str | None = None,
 ) -> dict:
-	"""Resolve `Campaign > Team > Global` effective policy (`ADR-P2-05`)."""
-	if work_item and (not campaign or not owner_user):
-		wi_row = frappe.db.get_value("CSKH Work Item", work_item, ["campaign", "assigned_to"], as_dict=True)
-		if wi_row:
-			campaign = campaign or wi_row.campaign
-			owner_user = owner_user or wi_row.assigned_to
-
-	if frappe.db.table_exists("CSKH Policy"):
+	if runtime_cache.table_exists("CSKH Policy"):
 		# 1. Campaign-scoped policy
 		if campaign:
 			camp_rows = frappe.db.get_all(
@@ -221,9 +222,17 @@ def resolve_effective_policy(
 				return serialize_policy(camp_rows[0])
 
 		# 2. Team-scoped policy (campaign team_scope first, then assignee's team node)
-		team_node = frappe.db.get_value("CSKH Campaign", campaign, "team_scope") if campaign else None
+		if campaign and runtime_cache.is_runtime_db_cache_active():
+			camp_info = runtime_cache.get_campaign_row(campaign)
+			team_node = camp_info.get("team_scope") if camp_info else None
+		else:
+			team_node = frappe.db.get_value("CSKH Campaign", campaign, "team_scope") if campaign else None
 		if not team_node and owner_user:
-			team_node = frappe.db.get_value("CRM Sales Hierarchy", {"user": owner_user}, "name")
+			if runtime_cache.is_runtime_db_cache_active():
+				u_node = runtime_cache.get_user_hierarchy_node(owner_user)
+				team_node = u_node["name"] if u_node else None
+			else:
+				team_node = frappe.db.get_value("CRM Sales Hierarchy", {"user": owner_user}, "name")
 		team_row = _resolve_team_policy_along_ancestors(team_node)
 		if team_row:
 			return serialize_policy(team_row)
@@ -240,6 +249,25 @@ def resolve_effective_policy(
 			return serialize_policy(global_rows[0])
 
 	return serialize_policy({"name": DEFAULT_GLOBAL_POLICY["policy_code"], **DEFAULT_GLOBAL_POLICY})
+
+
+def resolve_effective_policy(
+	campaign: str | None = None,
+	work_item: str | None = None,
+	owner_user: str | None = None,
+) -> dict:
+	"""Resolve `Campaign > Team > Global` effective policy (`ADR-P2-05`)."""
+	if work_item and (not campaign or not owner_user):
+		wi_row = frappe.db.get_value("CSKH Work Item", work_item, ["campaign", "assigned_to"], as_dict=True)
+		if wi_row:
+			campaign = campaign or wi_row.campaign
+			owner_user = owner_user or wi_row.assigned_to
+
+	return runtime_cache.get_cached_effective_policy(
+		campaign=campaign,
+		owner_user=owner_user,
+		compute_fn=lambda: _resolve_effective_policy_uncached(campaign=campaign, owner_user=owner_user),
+	)
 
 
 def get_outcome_codes_for_workflow(
@@ -509,6 +537,7 @@ def save_policy(
 	finally:
 		frappe.flags.cskh_in_settings_service = prev_flag
 
+	runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_POLICY)
 	frappe.db.commit()
 	return {"status": status_str, "policy": serialize_policy(doc), "idempotency_key": idem_val}
 
@@ -664,6 +693,7 @@ def save_outcome(
 	finally:
 		frappe.flags.cskh_in_settings_service = prev_flag
 
+	runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_OUTCOME)
 	frappe.db.commit()
 	return {"status": status_str, "outcome": serialize_outcome(doc), "idempotency_key": idem_val}
 

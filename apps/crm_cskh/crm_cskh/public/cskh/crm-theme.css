@@ -1,0 +1,270 @@
+/* Soft Modern SaaS Theme for Frappe CRM (`/crm/*` — Dashboard, Leads, Deals,
+   Contacts, Organizations, Notes, Tasks, Call Logs, Kanban, Details & Modals).
+   Injected cleanly into `<head>` via `crm_cskh.cskh_sidebar` (zero upstream modifications). */
+
+:root {
+	/* Cool luminous Slate surface & ink palette */
+	--surface-gray-1: #f6f8fc;
+	--surface-gray-2: #eef2f8;
+	--surface-gray-3: #e3eaf4;
+	--surface-gray-4: #d5dfed;
+	--surface-sidebar: #f6f8fc;
+	--surface-alpha-sidebar: #f6f8fc;
+
+	--ink-gray-9: #0f172a;
+	--ink-gray-8: #1e293b;
+	--ink-gray-7: #334155;
+	--ink-gray-6: #475569;
+	--ink-gray-5: #64748b;
+	--ink-gray-4: #94a3b8;
+	--ink-blue-link: #4f46e5;
+
+	--outline-gray-1: #e7edf6;
+	--outline-gray-2: #d8e1ee;
+	--outline-gray-3: #cbd5e1;
+
+	/* Softer, more generous corner radii */
+	--radius-1: 5px;
+	--radius-2: 7px;
+	--radius-3: 8.5px;
+	--radius-4: 10px;
+	--radius-5: 12px;
+	--radius-6: 14px;
+	--radius-7: 18px;
+	--radius-sm: 6px;
+	--radius-md: 10px;
+	--radius-lg: 14px;
+	--radius-xl: 18px;
+
+	/* Indigo focus glow & diffused SaaS elevation shadows */
+	--focus-default: 0 0 0 3px rgba(79, 70, 229, 0.16);
+	--focus-outline-default: 2px solid rgba(99, 102, 241, 0.45);
+	--elevation-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+	--elevation-base: 0 1px 3px rgba(15, 23, 42, 0.05), 0 6px 16px -4px rgba(15, 23, 42, 0.06);
+	--elevation-md: 0 4px 12px -2px rgba(15, 23, 42, 0.06), 0 12px 28px -6px rgba(15, 23, 42, 0.08);
+	--elevation-lg: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 20px 45px -10px rgba(15, 23, 42, 0.12);
+	--elevation-xl: 0 20px 50px -12px rgba(15, 23, 42, 0.18), 0 8px 20px -6px rgba(15, 23, 42, 0.06);
+}
+
+body {
+	font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	color: #0f172a;
+}
+
+/* Harmonize Frappe CRM neon-pink brand emblem (#EF0BF5) into cohesive Royal Indigo */
+svg[viewBox="0 0 300 300"] > path[fill="#EF0BF5"] {
+	fill: #4f46e5 !important;
+}
+
+svg[viewBox="0 0 300 300"] {
+	border-radius: 8px;
+	filter: drop-shadow(0 3px 8px rgba(79, 70, 229, 0.24));
+}
+
+/* ========================================================================== */
+/* Left Sidebar (`AppSidebar`, `SidebarItem`, Onboarding box)                 */
+/* ========================================================================== */
+
+#app .bg-surface-gray-1:has(> [data-slot="sidebar"]),
+#app [data-slot="sidebar"] {
+	background: linear-gradient(180deg, #f8faff 0%, #f1f5fc 100%) !important;
+	border-right-color: #e2e8f0 !important;
+}
+
+#app [data-slot="sidebar-item"] {
+	border-radius: 10px !important;
+	min-height: 33px;
+	margin-top: 1px;
+	margin-bottom: 1px;
+	border: 1px solid transparent;
+	transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease !important;
+}
+
+#app [data-slot="sidebar-item"]:hover {
+	background: rgba(79, 70, 229, 0.06) !important;
+	color: #0f172a !important;
+}
+
+#app [data-slot="sidebar-item"][data-state="active"],
+#app [data-slot="sidebar-item"]:has(> a.router-link-active:not([href*="view="])) {
+	background: linear-gradient(90deg, #ffffff 0%, #f4f6ff 100%) !important;
+	border-color: #dbeafe !important;
+	color: #4338ca !important;
+	font-weight: 600;
+	box-shadow: 0 1px 3px rgba(79, 70, 229, 0.08), 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+}
+
+#app [data-slot="sidebar-item"][data-state="active"] svg,
+#app [data-slot="sidebar-item"][data-state="active"] [class*="lucide-"],
+#app [data-slot="sidebar-item"][data-state="active"] span {
+	color: #4338ca !important;
+}
+
+/* Soften the bottom "Getting Started / Bắt đầu sử dụng" card inside the sidebar */
+#app [data-slot="sidebar"] .rounded-lg.border,
+#app [data-slot="sidebar"] .bg-surface-white,
+#app [data-slot="sidebar"] .bg-surface-base {
+	border-radius: 14px !important;
+	border-color: #e2e8f0 !important;
+	box-shadow: 0 2px 10px -3px rgba(15, 23, 42, 0.05);
+}
+
+/* ========================================================================== */
+/* Top Header Bar (`AppHeader` / `LayoutHeader`)                              */
+/* ========================================================================== */
+
+#app .flex.border-b:has(> #app-header) {
+	background: rgba(255, 255, 255, 0.88) !important;
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	border-bottom: 1px solid #e6ecf5 !important;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025);
+	min-height: 48px;
+}
+
+/* ========================================================================== */
+/* Primary & Subtle Buttons across CRM (`+ Tạo mới`, `Lưu`, Toolbar pills)    */
+/* ========================================================================== */
+
+#app button.bg-surface-gray-10:not([disabled]),
+#app a.bg-surface-gray-10:not([disabled]),
+body [role="dialog"] button.bg-surface-gray-10:not([disabled]) {
+	background: linear-gradient(180deg, #5b54f1 0%, #4f46e5 100%) !important;
+	border: 1px solid #4338ca !important;
+	color: #ffffff !important;
+	border-radius: 9.5px !important;
+	box-shadow: 0 2px 6px -1px rgba(79, 70, 229, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+	transition: box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease !important;
+}
+
+#app button.bg-surface-gray-10:not([disabled]):hover,
+#app a.bg-surface-gray-10:not([disabled]):hover,
+body [role="dialog"] button.bg-surface-gray-10:not([disabled]):hover {
+	background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%) !important;
+	border-color: #3730a3 !important;
+	box-shadow: 0 5px 14px -3px rgba(79, 70, 229, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+}
+
+#app button.bg-surface-gray-2:not([disabled]),
+#app a.bg-surface-gray-2:not([disabled]),
+body [role="dialog"] button.bg-surface-gray-2:not([disabled]) {
+	background-color: #f8fafc !important;
+	border: 1px solid #e2e8f0 !important;
+	border-radius: 9.5px !important;
+	color: #334155 !important;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+	transition: all 0.15s ease !important;
+}
+
+#app button.bg-surface-gray-2:not([disabled]):hover,
+#app a.bg-surface-gray-2:not([disabled]):hover,
+body [role="dialog"] button.bg-surface-gray-2:not([disabled]):hover {
+	background-color: #ffffff !important;
+	border-color: #cbd5e1 !important;
+	color: #0f172a !important;
+	box-shadow: 0 2px 6px -1px rgba(15, 23, 42, 0.06);
+}
+
+/* ========================================================================== */
+/* Dashboard (`/crm` & `/crm/dashboard` — Trang tổng quan)                    */
+/* ========================================================================== */
+
+#app div:has(> .vgl-layout) {
+	background-color: #f4f6fb;
+	background-image:
+		radial-gradient(900px 320px at 18% -40px, rgba(79, 70, 229, 0.06), transparent 70%),
+		radial-gradient(800px 280px at 85% -40px, rgba(14, 165, 233, 0.05), transparent 70%);
+	background-repeat: no-repeat;
+}
+
+#app .vgl-layout .rounded.shadow,
+#app .vgl-layout .rounded-md.shadow {
+	border-radius: 16px !important;
+	border: 1px solid #e2e8f0 !important;
+	background: linear-gradient(180deg, #ffffff 0%, #fcfdff 100%) !important;
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 22px -6px rgba(15, 23, 42, 0.055) !important;
+	transition: box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+#app .vgl-layout .rounded.shadow:hover,
+#app .vgl-layout .rounded-md.shadow:hover {
+	border-color: #c7d2fe !important;
+	box-shadow: 0 10px 24px -8px rgba(79, 70, 229, 0.12), 0 4px 10px -2px rgba(15, 23, 42, 0.05) !important;
+}
+
+/* ========================================================================== */
+/* Quick Filters, Form Controls, List Views & Kanban Boards                   */
+/* ========================================================================== */
+
+/* Quick filter bar inputs & selects (excluding inline detail-sidebar fields) */
+#app :not(.sections) > * input.bg-surface-gray-2,
+#app :not(.sections) > * select.bg-surface-gray-2,
+#app :not(.sections) > * [role="combobox"].bg-surface-gray-2,
+body [role="dialog"] input.bg-surface-gray-2,
+body [role="dialog"] textarea.bg-surface-gray-2,
+body [role="dialog"] select.bg-surface-gray-2,
+body [role="dialog"] [role="combobox"].bg-surface-gray-2 {
+	background-color: #f8fafc !important;
+	border: 1px solid #e2e8f0 !important;
+	border-radius: 9.5px !important;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease !important;
+}
+
+#app :not(.sections) > * input.bg-surface-gray-2:hover,
+#app :not(.sections) > * select.bg-surface-gray-2:hover,
+#app :not(.sections) > * [role="combobox"].bg-surface-gray-2:hover {
+	background-color: #ffffff !important;
+	border-color: #cbd5e1 !important;
+}
+
+#app :not(.sections) > * input.bg-surface-gray-2:focus,
+#app :not(.sections) > * select.bg-surface-gray-2:focus,
+body [role="dialog"] input.bg-surface-gray-2:focus,
+body [role="dialog"] textarea.bg-surface-gray-2:focus {
+	background-color: #ffffff !important;
+	border-color: #6366f1 !important;
+	box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15) !important;
+	outline: none !important;
+}
+
+/* ListView header bar & rows across Leads, Deals, Contacts, Orgs, Notes, Tasks, Call Logs */
+#app .bg-surface-gray-2.rounded {
+	border-radius: 10px !important;
+}
+
+#app a.group.flex.items-center:hover,
+#app div.group.flex.items-center.cursor-pointer:hover {
+	background-color: #f5f8ff !important;
+	border-radius: 9px;
+}
+
+/* Kanban columns & cards */
+#app .min-w-72.w-72 {
+	background: #f5f7fc;
+	border: 1px solid #e8eef6;
+	border-radius: 14px !important;
+	padding: 12px !important;
+}
+
+/* Modals, Popovers & Dropdown Menus */
+body [role="dialog"] {
+	border-radius: 18px !important;
+	border: 1px solid #e2e8f0 !important;
+	box-shadow: 0 24px 60px -12px rgba(15, 23, 42, 0.22), 0 8px 20px -6px rgba(15, 23, 42, 0.08) !important;
+}
+
+body .fixed.inset-0.bg-black\/40,
+body .fixed.inset-0.bg-gray-900\/50,
+body [data-headlessui-state] > .fixed.inset-0 {
+	backdrop-filter: blur(4px);
+	-webkit-backdrop-filter: blur(4px);
+}
+
+body [data-slot="content-body"],
+body [role="menu"],
+body [role="listbox"] {
+	border-radius: 12px !important;
+	border-color: #e2e8f0 !important;
+}

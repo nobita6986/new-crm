@@ -1,0 +1,450 @@
+#!/usr/bin/env python3
+"""Offline unit tests for P4 Đợt 2 (`batch2_delta`) contracts, scrubber, schema classifier, and `--plan-only` CLI."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import pathlib
+import subprocess
+import sys
+import tempfile
+import unittest
+import zipfile
+
+RELEASE_DIR = pathlib.Path(__file__).resolve().parent
+REPO_ROOT = RELEASE_DIR.parents[1]
+if str(RELEASE_DIR) not in sys.path:
+    sys.path.insert(0, str(RELEASE_DIR))
+
+from batch2_delta import (  # noqa: E402
+    BASELINE_MAIN_COMMIT_SHA,
+    GOLDEN_DATASET_EXPECTED_SHA256,
+    LOCKED_BATCH1_COMMIT_SHA,
+    LOCKED_BATCH1_IMAGE_DIGEST,
+)
+from batch2_delta.common_stack import (  # noqa: E402
+    EDGE_RATELIMIT_OVERRIDE,
+    SecretScrubber,
+    build_minimal_xlsx,
+)
+from batch2_delta.verify_g06_g09_migration_and_rollback import (  # noqa: E402
+    SEED_N_MINUS_1_PY,
+    SNAPSHOT_PY,
+    classify_schema_diff,
+    forward_fix_vs_restore_contract,
+)
+from batch2_delta.verify_g11_g12_security_topology import SEED_G11_G12_PY  # noqa: E402
+from batch2_delta.verify_g13_g14_g15_g17_delta import G15_SETUP_AND_ORACLE_PY  # noqa: E402
+
+
+class TestBatch2DeltaContracts(unittest.TestCase):
+    def test_locked_provenance_and_golden_fixture_sha256(self) -> None:
+        self.assertEqual(
+            LOCKED_BATCH1_COMMIT_SHA, "427af4834eda48a15ca86c15e88342c3c40d5f2f"
+        )
+        self.assertEqual(
+            BASELINE_MAIN_COMMIT_SHA, "467830195358b2431ac772486530ab935887a518"
+        )
+        self.assertTrue(
+            LOCKED_BATCH1_IMAGE_DIGEST.startswith("ghcr.io/nobita6986/crm-cskh@sha256:")
+        )
+        golden_path = (
+            REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "tests"
+            / "fixtures"
+            / "t1c_p3_golden_dataset_expected.json"
+        )
+        actual_sha = hashlib.sha256(golden_path.read_bytes()).hexdigest()
+        self.assertEqual(actual_sha, GOLDEN_DATASET_EXPECTED_SHA256)
+
+    def test_secret_scrubber_redacts_cookies_csrf_private_urls_and_phones(self) -> None:
+        scrubber = SecretScrubber()
+        scrubber.register("SuperSecretAdminPw!123", "<REDACTED_ADMIN_PW>")
+
+        raw = (
+            'Cookie: sid=abcdef0123456789; "X-Frappe-CSRF-Token": "tok-999888" '
+            "url=/private/files/cskh_export_oct.csv phone=0908123456 "
+            'intl=+84912345678 pw=SuperSecretAdminPw!123 "encryption_key": "fernet-xyz"'
+        )
+        scrubbed = scrubber.scrub_text(raw)
+        self.assertNotIn("abcdef0123456789", scrubbed)
+        self.assertNotIn("tok-999888", scrubbed)
+        self.assertNotIn("cskh_export_oct.csv", scrubbed)
+        self.assertNotIn("0908123456", scrubbed)
+        self.assertNotIn("+84912345678", scrubbed)
+        self.assertNotIn("SuperSecretAdminPw!123", scrubbed)
+        self.assertNotIn("fernet-xyz", scrubbed)
+        self.assertIn("******3456", scrubbed)
+        self.assertIn("******5678", scrubbed)
+
+        with self.assertRaises(RuntimeError):
+            scrubber.assert_no_leaks("leak SuperSecretAdminPw!123 here")
+
+    def test_schema_diff_classification_and_forward_fix_contract(self) -> None:
+        base = {
+            "tabCSKH Work Item": {
+                "name": {
+                    "column_type": "varchar(140)",
+                    "is_nullable": "NO",
+                    "column_default": None,
+                },
+                "status": {
+                    "column_type": "varchar(140)",
+                    "is_nullable": "YES",
+                    "column_default": "'queued'",
+                },
+            }
+        }
+        # Class A: identical schema
+        c_a = classify_schema_diff(base, base)
+        self.assertEqual(c_a["compatibility_class"], "Class_A_Code_And_Runtime_Only")
+        self.assertTrue(c_a["tier3_image_rollback_safe"])
+
+        # Class B: additive nullable column
+        after_b = {
+            "tabCSKH Work Item": {
+                **base["tabCSKH Work Item"],
+                "extra_note": {
+                    "column_type": "text",
+                    "is_nullable": "YES",
+                    "column_default": None,
+                },
+            }
+        }
+        c_b = classify_schema_diff(base, after_b)
+        self.assertEqual(
+            c_b["compatibility_class"], "Class_B_Additive_Backward_Compatible"
+        )
+        self.assertTrue(c_b["tier3_image_rollback_safe"])
+
+        # Class D: dropped column -> Tier 3 unsafe, requires forward-fix or Tier 4 restore
+        after_d = {"tabCSKH Work Item": {"name": base["tabCSKH Work Item"]["name"]}}
+        c_d = classify_schema_diff(base, after_d)
+        self.assertEqual(
+            c_d["compatibility_class"],
+            "Class_D_Breaking_Requires_Forward_Fix_Or_Tier4_Restore",
+        )
+        self.assertFalse(c_d["tier3_image_rollback_safe"])
+
+        contract = forward_fix_vs_restore_contract()
+        self.assertIn("tier3_image_rollback_n_to_n_minus_1", contract)
+        self.assertIn("class_c_and_d_forward_fix_vs_tier4_restore", contract)
+        self.assertIn(
+            "primary_path_forward_fix",
+            contract["class_c_and_d_forward_fix_vs_tier4_restore"],
+        )
+        self.assertIn(
+            "last_resort_tier4_db_restore",
+            contract["class_c_and_d_forward_fix_vs_tier4_restore"],
+        )
+
+    def test_build_minimal_xlsx_is_valid_ooxml_zip(self) -> None:
+        raw = build_minimal_xlsx(
+            [["phone", "name"], ["0908000111", "Ứng viên & Kiểm thử <XLSX>"]]
+        )
+        with zipfile.ZipFile(
+            pathlib.Path(tempfile.mktemp(suffix=".xlsx"))
+            if False
+            else __import__("io").BytesIO(raw)
+        ) as zf:
+            names = set(zf.namelist())
+            self.assertIn("[Content_Types].xml", names)
+            self.assertIn("xl/workbook.xml", names)
+            self.assertIn("xl/worksheets/sheet1.xml", names)
+            sheet_xml = zf.read("xl/worksheets/sheet1.xml").decode("utf-8")
+            self.assertIn("&amp;", sheet_xml)
+            self.assertIn("&lt;XLSX&gt;", sheet_xml)
+
+    def test_edge_ratelimit_override_is_self_contained_in_release_dir(self) -> None:
+        self.assertTrue(EDGE_RATELIMIT_OVERRIDE.is_file())
+        txt = EDGE_RATELIMIT_OVERRIDE.read_text(encoding="utf-8")
+        self.assertIn("${COMPOSE_PROJECT_NAME}-login-rl.ratelimit.average", txt)
+        self.assertIn(
+            "${COMPOSE_PROJECT_NAME}-heavy-rl.ratelimit.sourcecriterion.requestheadername=Cookie",
+            txt,
+        )
+        self.assertIn(
+            "routers.${COMPOSE_PROJECT_NAME}-frontend-http.service=${COMPOSE_PROJECT_NAME}-frontend",
+            txt,
+        )
+
+    def test_all_three_verifiers_support_plan_only_cli(self) -> None:
+        scripts = [
+            "verify_g06_g09_migration_and_rollback.py",
+            "verify_g11_g12_security_topology.py",
+            "verify_g13_g14_g15_g17_delta.py",
+        ]
+        with tempfile.TemporaryDirectory(prefix="b2-plan-") as tmp:
+            tdir = pathlib.Path(tmp)
+            for idx, sname in enumerate(scripts):
+                out_json = tdir / f"out-{idx}.json"
+                out_log = tdir / f"out-{idx}.log"
+                proc = subprocess.run(
+                    [
+                        sys.executable,
+                        str(RELEASE_DIR / "batch2_delta" / sname),
+                        "--plan-only",
+                        "--report-out",
+                        str(out_json),
+                        "--log-out",
+                        str(out_log),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                self.assertEqual(proc.returncode, 0)
+                parsed = json.loads(out_json.read_text(encoding="utf-8"))
+                self.assertEqual(parsed["status"], "PLANNED")
+                self.assertEqual(
+                    parsed["locked_batch1_commit_sha"], LOCKED_BATCH1_COMMIT_SHA
+                )
+
+    def test_embedded_site_python_snippets_compile_cleanly(self) -> None:
+        for name, src in (
+            ("SEED_N_MINUS_1_PY", SEED_N_MINUS_1_PY),
+            ("SNAPSHOT_PY", SNAPSHOT_PY),
+            ("SEED_G11_G12_PY", SEED_G11_G12_PY),
+            ("G15_SETUP_AND_ORACLE_PY", G15_SETUP_AND_ORACLE_PY),
+        ):
+            compile(src, f"<{name}>", "exec")
+
+    def test_verifier_cskh_doctype_columns_and_api_keys(self) -> None:
+        import re
+
+        dt_root = REPO_ROOT / "apps" / "crm_cskh" / "crm_cskh" / "crm_cskh" / "doctype"
+        std_cols = {
+            "name",
+            "creation",
+            "modified",
+            "modified_by",
+            "owner",
+            "docstatus",
+            "idx",
+        }
+        schema: dict[str, set[str]] = {}
+        for jf in dt_root.glob("cskh_*/*.json"):
+            data = json.loads(jf.read_text(encoding="utf-8"))
+            if data.get("doctype") == "DocType" and data.get("name"):
+                cols = set(std_cols) | {
+                    f["fieldname"]
+                    for f in data.get("fields", [])
+                    if f.get("fieldname")
+                    and f.get("fieldtype")
+                    not in ("Section Break", "Column Break", "Tab Break", "HTML")
+                }
+                schema[data["name"]] = cols
+
+        for sname in (
+            "verify_g06_g09_migration_and_rollback.py",
+            "verify_g11_g12_security_topology.py",
+            "verify_g13_g14_g15_g17_delta.py",
+        ):
+            src = (RELEASE_DIR / "batch2_delta" / sname).read_text(encoding="utf-8")
+            self.assertNotIn('["attempt"]', src, f"Stale record_attempt key in {sname}")
+            self.assertNotIn(
+                '["correction"]', src, f"Stale request_correction key in {sname}"
+            )
+            self.assertNotIn("dedup_key", src, f"Non-existent dedup_key in {sname}")
+            self.assertNotIn(
+                "reschedule_count", src, f"Non-existent reschedule_count in {sname}"
+            )
+            self.assertNotIn(
+                "connected_callback",
+                src,
+                f"Non-existent outcome connected_callback in {sname}",
+            )
+            for m in re.finditer(
+                r"SELECT\s+([a-zA-Z0-9_,\s]+)\s+FROM\s+`tab(CSKH [^`]+)`", src
+            ):
+                sel_part, dt_name = m.group(1), m.group(2)
+                if "COUNT(" in sel_part.upper() or dt_name not in schema:
+                    continue
+                for raw_col in sel_part.split(","):
+                    col = raw_col.strip().split()[0]
+                    if "." in col:
+                        col = col.split(".")[-1]
+                    self.assertIn(
+                        col,
+                        schema[dt_name],
+                        f"{sname}: column {col!r} missing from {dt_name}",
+                    )
+        bench_src = (RELEASE_DIR / "benchmark_p4_isolated.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("publish_revision", bench_src)
+        self.assertNotIn("connected_callback", bench_src)
+        self.assertNotIn("S1AbortProbe", bench_src)
+        self.assertNotIn("identity_service.register(", bench_src)
+        self.assertIn("identity_service.claim_canonical_identity(", bench_src)
+        self.assertIn('r_info.get("created")', bench_src)
+
+        import ast
+        from benchmark_p4_isolated import S1_IN_CONTAINER_BENCH_SCRIPT
+
+        tree = ast.parse(S1_IN_CONTAINER_BENCH_SCRIPT, filename="<s1_in_container>")
+        module_files = {
+            "identity_service": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "services"
+            / "identity.py",
+            "distribution": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "services"
+            / "distribution.py",
+            "import_service": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "services"
+            / "import_service.py",
+            "contact_attempt": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "services"
+            / "contact_attempt.py",
+            "read_model": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "services"
+            / "read_model.py",
+            "p3_reporting": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "api"
+            / "p3_reporting.py",
+        }
+        defined_funcs: dict[str, set[str]] = {}
+        for alias, mf in module_files.items():
+            mtree = ast.parse(mf.read_text(encoding="utf-8"), filename=str(mf))
+            defined_funcs[alias] = {
+                n.name
+                for n in mtree.body
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            }
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id in defined_funcs
+            ):
+                self.assertIn(
+                    node.attr,
+                    defined_funcs[node.value.id],
+                    f"S1_IN_CONTAINER_BENCH_SCRIPT references missing {node.value.id}.{node.attr}",
+                )
+
+        perm_src = (
+            REPO_ROOT / "apps" / "crm_cskh" / "crm_cskh" / "permissions.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn(
+            "org_hierarchy._permission_query_conditions =",
+            perm_src,
+        )
+        self.assertIn(
+            "org_hierarchy.get_lead_permission_query_conditions =",
+            perm_src,
+        )
+        self.assertIn(
+            "org_hierarchy.get_deal_permission_query_conditions =",
+            perm_src,
+        )
+
+    def test_lock_diff_parsers_and_reachability_probe_compile(self) -> None:
+        from collect_cve_and_lock_diff_evidence import (
+            DEFAULT_BASELINE_SHA,
+            IN_CONTAINER_REACHABILITY_PROBE,
+            _diff_kv_map,
+            _parse_dpkg_list,
+            _parse_pip_freeze,
+            build_lock_diff_report,
+        )
+
+        compile(IN_CONTAINER_REACHABILITY_PROBE, "<reachability_probe>", "exec")
+        p_before = _parse_pip_freeze("PyJWT==2.13.0\npillow==12.3.0\nPyMySQL==1.1.1\n")
+        p_after = _parse_pip_freeze("PyJWT==2.15.1\npillow==13.0.0\nPyMySQL==1.1.1\n")
+        diff = _diff_kv_map(p_before, p_after)
+        self.assertEqual(diff["changed_count"], 2)
+        self.assertEqual(diff["added_count"], 0)
+        dpkg = _parse_dpkg_list(
+            "ii  libmariadb3:amd64  1:11.8.6-0+deb13u1  amd64\nlibxml2\t2.12.7+dfsg\n"
+        )
+        self.assertIn("libmariadb3:amd64", dpkg)
+        self.assertIn("libxml2", dpkg)
+
+        live_diff = build_lock_diff_report(
+            repo_root=REPO_ROOT,
+            baseline_sha=DEFAULT_BASELINE_SHA,
+            candidate_build_dir=REPO_ROOT / "deploy" / "images" / "evidence",
+        )
+        self.assertEqual(
+            live_diff["component_version_transitions"]["frappe"]["before"]["tag"],  # type: ignore[index]
+            "v15.123.1",
+        )
+        self.assertEqual(
+            live_diff["component_version_transitions"]["frappe"]["after"]["tag"],  # type: ignore[index]
+            "v15.126.0",
+        )
+
+    def test_f_g09_hook_01_tier3_clear_cache_ordering_and_rolled_back_hooks_contract(
+        self,
+    ) -> None:
+        src = (
+            RELEASE_DIR / "batch2_delta" / "verify_g06_g09_migration_and_rollback.py"
+        ).read_text(encoding="utf-8")
+        # Locate Step 5 (Tier 3 rollback N -> N-1) and enforce exact safe ordering:
+        #   stop N -> set_app_image(N-1) -> configurator -> bench clear-cache + clear-website-cache
+        #   -> up -d N-1 -> verify live HTTP frappe.apps.get_apps + Python hooks WITHOUT second clear_cache()!
+        step5_idx = src.index("# Step 5: `G09` / `D13` / `F-G09-HOOK-01`")
+        step6_idx = src.index("# Step 6:", step5_idx)
+        step5_src = src[step5_idx:step6_idx]
+
+        stop_pos = step5_src.index('stack.run_compose(["stop", *APP_RUNTIME_SERVICES])')
+        pin_pos = step5_src.index("stack.set_app_image(n_minus_1_image)")
+        cfg_pos = step5_src.index('stack.run_compose(["run", "--rm", "configurator"])')
+        clear_pos = step5_src.index("bench --site {stack.site_name} clear-cache")
+        clear_web_pos = step5_src.index(
+            "bench --site {stack.site_name} clear-website-cache"
+        )
+        up_pos = step5_src.index(
+            '["up", "-d", "--no-build", "--force-recreate", *APP_RUNTIME_SERVICES]'
+        )
+        ping_pos = step5_src.index("stack.wait_http_ping(timeout_sec=90)")
+        apps_verify_pos = step5_src.index(
+            'st_t3_apps_staff, _, body_t3_apps_staff = staff_a.get_json(\n            "/api/method/frappe.apps.get_apps"'
+        )
+        self.assertLess(stop_pos, pin_pos)
+        self.assertLess(pin_pos, cfg_pos)
+        self.assertLess(cfg_pos, clear_pos)
+        self.assertLess(clear_pos, clear_web_pos)
+        self.assertLess(clear_web_pos, up_pos)
+        self.assertLess(up_pos, ping_pos)
+        self.assertLess(ping_pos, apps_verify_pos)
+
+        # Tier 3 verification MUST NOT hide stale Redis hooks with a post-traffic `frappe.clear_cache()`
+        self.assertNotIn("frappe.clear_cache()", step5_src)
+        self.assertIn("has_stale_cskh_sidebar_hook", step5_src)
+        self.assertIn("has_stale_cskh_setup_wizard_hook", step5_src)
+        self.assertIn("has_stale_n_after_request_hook", step5_src)
+        self.assertIn("clear_cache_before_traffic_order", src)
+
+        contract = forward_fix_vs_restore_contract()
+        t3_action = str(contract["tier3_image_rollback_n_to_n_minus_1"]["action"])  # type: ignore[index]
+        self.assertIn("F-G09-HOOK-01", t3_action)
+        self.assertIn("clear-website-cache", t3_action)
+        self.assertIn("BEFORE starting `N-1` runtime services", t3_action)
+
+
+if __name__ == "__main__":
+    unittest.main()

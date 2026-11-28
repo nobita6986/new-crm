@@ -18,7 +18,7 @@ from frappe.utils import cint, get_datetime, getdate, now_datetime
 
 from crm_cskh.api._params import parse_int, parse_optional_str, parse_pagination
 from crm_cskh.p1_models import OWNED_ACTIVE_WORK_ITEM_STATES
-from crm_cskh.p2_models import OPEN_TASK_STATES
+from crm_cskh.p2_models import OPEN_TASK_STATES, validate_cskh_followup_task
 from crm_cskh.p2_permissions import (
 	ROLE_ADMIN,
 	_in_team,
@@ -30,7 +30,7 @@ from crm_cskh.p2_permissions import (
 	assert_workflow_actor,
 	leader_authorized_work_item_sql,
 )
-from crm_cskh.services import reporting
+from crm_cskh.services import reporting, runtime_cache
 from crm_cskh.services.errors import (
 	Conflict,
 	DoNotContact,
@@ -92,21 +92,24 @@ def _cancel_task_todos(task_name: str, allocated_to: str | None = None) -> None:
 		frappe.db.set_value("ToDo", todo_name, "status", "Cancelled", update_modified=False)
 
 
-def _ensure_task_todo(task_name: str, user: str, description: str) -> str | None:
+def _ensure_task_todo(
+	task_name: str, user: str, description: str, *, is_new_task: bool = False
+) -> str | None:
 	if not user:
 		return None
-	existing = frappe.db.get_value(
-		"ToDo",
-		{
-			"reference_type": "CRM Task",
-			"reference_name": str(task_name),
-			"allocated_to": user,
-			"status": "Open",
-		},
-		"name",
-	)
-	if existing:
-		return existing
+	if not is_new_task:
+		existing = frappe.db.get_value(
+			"ToDo",
+			{
+				"reference_type": "CRM Task",
+				"reference_name": str(task_name),
+				"allocated_to": user,
+				"status": "Open",
+			},
+			"name",
+		)
+		if existing:
+			return existing
 	now_ts = now_datetime()
 	todo = frappe.get_doc(
 		{
@@ -131,16 +134,35 @@ def _ensure_task_todo(task_name: str, user: str, description: str) -> str | None
 	return todo.name
 
 
-def get_open_followup_task(work_item: str) -> dict | None:
-	if not work_item or not frappe.db.has_column("CRM Task", "cskh_work_item"):
+def get_open_followup_task(work_item: str, *, known_task_id: str | None = None) -> dict | None:
+	if not work_item or not runtime_cache.has_column("CRM Task", "cskh_work_item"):
 		return None
+	if known_task_id:
+		pk_rows = frappe.db.sql(
+			"""
+			select name, title, description, status, due_date, assigned_to,
+			       cskh_work_item, cskh_source_attempt, cskh_reschedule_count, cskh_task_history_json
+			from `tabCRM Task`
+			where name = %s
+			  and cskh_work_item = %s
+			  and cskh_is_followup = 1
+			  and status in ('Backlog', 'Todo', 'In Progress')
+			limit 1
+			""",
+			(known_task_id, work_item),
+			as_dict=True,
+		)
+		if pk_rows:
+			row = pk_rows[0]
+			row["name"] = str(row["name"])
+			return row
 	rows = frappe.db.sql(
 		"""
 		select name, title, description, status, due_date, assigned_to,
 		       cskh_work_item, cskh_source_attempt, cskh_reschedule_count, cskh_task_history_json
 		from `tabCRM Task`
 		where cskh_work_item = %s
-		  and coalesce(cskh_is_followup, 0) = 1
+		  and cskh_is_followup = 1
 		  and status in ('Backlog', 'Todo', 'In Progress')
 		order by creation desc, name desc
 		""",
@@ -155,14 +177,14 @@ def get_open_followup_task(work_item: str) -> dict | None:
 
 
 def count_open_followup_tasks(work_item: str) -> int:
-	if not work_item or not frappe.db.has_column("CRM Task", "cskh_work_item"):
+	if not work_item or not runtime_cache.has_column("CRM Task", "cskh_work_item"):
 		return 0
 	return int(
 		frappe.db.sql(
 			"""
 			select count(*) from `tabCRM Task`
 			where cskh_work_item = %s
-			  and coalesce(cskh_is_followup, 0) = 1
+			  and cskh_is_followup = 1
 			  and status in ('Backlog', 'Todo', 'In Progress')
 			""",
 			(work_item,),
@@ -174,13 +196,13 @@ def count_open_followup_tasks(work_item: str) -> int:
 def _find_followup_idempotent_entry(
 	work_item: str, actor: str, idempotency_key: str
 ) -> tuple[dict, dict] | None:
-	if not idempotency_key or not frappe.db.has_column("CRM Task", "cskh_task_history_json"):
+	if not idempotency_key or not runtime_cache.has_column("CRM Task", "cskh_task_history_json"):
 		return None
 	rows = frappe.db.sql(
 		"""
 		select name, status, due_date, cskh_reschedule_count, cskh_task_history_json
 		from `tabCRM Task`
-		where cskh_work_item = %s and coalesce(cskh_is_followup, 0) = 1
+		where cskh_work_item = %s and cskh_is_followup = 1
 		order by modified desc, name desc
 		""",
 		(work_item,),
@@ -204,6 +226,12 @@ def create_followup_in_tx(
 	idempotency_key: str | None = None,
 	payload_hash: str | None = None,
 	now=None,
+	*,
+	lead_display: str | None = None,
+	open_hist: dict | None = None,
+	policy: dict | None = None,
+	calendar=None,
+	skip_open_count_check: bool = False,
 ) -> str:
 	"""Create the single open callback `CRM Task` for `work_item_row` inside caller's transaction."""
 	now_dt = get_datetime(now or now_datetime())
@@ -214,17 +242,15 @@ def create_followup_in_tx(
 	if not owner:
 		raise WorkItemNotActive("Work Item chưa có người phụ trách hợp lệ để đặt lịch hẹn lại.")
 
-	if count_open_followup_tasks(work_item) > 0:
+	if not skip_open_count_check and count_open_followup_tasks(work_item) > 0:
 		raise Conflict(
 			"Work Item đang có lịch hẹn mở; vui lòng dời lịch hoặc hoàn tất lịch hẹn hiện tại.",
 			code="CONFLICT",
 		)
 
-	lead_display = (
-		frappe.db.get_value("CRM Lead", lead, "lead_name")
-		or frappe.db.get_value("CRM Lead", lead, "first_name")
-		or lead
-	)
+	if not lead_display:
+		l_row = frappe.db.get_value("CRM Lead", lead, ["lead_name", "first_name"], as_dict=True) or {}
+		lead_display = l_row.get("lead_name") or l_row.get("first_name") or lead
 	clean_title = sanitize_note_text(title, max_length=140) or f"Hẹn liên hệ lại — {lead_display}"
 	clean_desc = sanitize_note_text(description, max_length=2000)
 
@@ -244,9 +270,7 @@ def create_followup_in_tx(
 	prev_flag = getattr(frappe.flags, "cskh_in_followup_service", False)
 	frappe.flags.cskh_in_followup_service = True
 	try:
-		# Insert with `assigned_to=None` so upstream `CRMTask.after_insert` neither runs
-		# `frappe.desk.form.assign_to.add` (which demands generic write permission) nor
-		# sends an un-committed notification before `frappe.db.commit()`.
+		session_user = getattr(getattr(frappe, "session", None), "user", None) or actor
 		task = frappe.get_doc(
 			{
 				"doctype": "CRM Task",
@@ -255,7 +279,7 @@ def create_followup_in_tx(
 				"status": "Todo",
 				"priority": "Medium",
 				"due_date": due_dt,
-				"assigned_to": None,
+				"assigned_to": owner,
 				"reference_doctype": "CRM Lead",
 				"reference_docname": lead,
 				"cskh_work_item": work_item,
@@ -263,12 +287,19 @@ def create_followup_in_tx(
 				"cskh_source_attempt": source_attempt,
 				"cskh_reschedule_count": 0,
 				"cskh_task_history_json": json.dumps(history, ensure_ascii=False),
+				"owner": session_user,
+				"modified_by": session_user,
 			}
 		)
-		task.insert(ignore_permissions=True)
+		task.set("__islocal", 1)
+		task.flags.in_insert = True
+		validate_cskh_followup_task(task)
+		task.set_new_name()
+		task.creation = now_dt
+		task.modified = now_dt
+		task.db_insert()
 		task_id = str(task.name)
-		frappe.db.set_value("CRM Task", task_id, "assigned_to", owner, update_modified=False)
-		_ensure_task_todo(task_id, owner, clean_title)
+		_ensure_task_todo(task_id, owner, clean_title, is_new_task=True)
 
 		from crm_cskh.services import sla_engine
 
@@ -281,6 +312,10 @@ def create_followup_in_tx(
 			due_dt=due_dt,
 			actor=actor,
 			now_dt=now_dt,
+			open_hist=open_hist,
+			policy=policy,
+			calendar=calendar,
+			is_new_task=True,
 		)
 		return task_id
 	finally:

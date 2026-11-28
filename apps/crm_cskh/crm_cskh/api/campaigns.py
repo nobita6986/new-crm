@@ -158,6 +158,8 @@ def save_rule(campaign=None, user=None, weight=None, capacity_limit=0, team=None
 		raise InvalidRequest("The campaign and the assignee are required.")
 	if not frappe.db.exists("CSKH Campaign", campaign):
 		raise NotFound("The campaign does not exist.")
+	if not frappe.db.exists("User", user):
+		raise InvalidRequest("The assignee user does not exist.")
 	if isinstance(weight, bool):
 		raise InvalidRequest("The weight must be an integer.")
 	try:

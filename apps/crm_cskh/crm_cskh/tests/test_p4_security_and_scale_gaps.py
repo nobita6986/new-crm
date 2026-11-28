@@ -1,0 +1,982 @@
+"""P4 backend regression suite closing `S13`/`S14`, `role-change`, `disabled-user` allocation exclusion,
+and `G18` bulk SQL / KPI drill-down optimization parity (`P4.md` §§9.2, 13.2).
+"""
+
+from __future__ import annotations
+
+from datetime import timedelta
+from unittest import mock
+
+import frappe
+from frappe.utils import add_days, now_datetime
+
+from crm_cskh import permissions
+from crm_cskh.api import campaigns as campaigns_api
+from crm_cskh.api import p3_reporting as p3_api
+from crm_cskh.api import workflow as workflow_api
+from crm_cskh.jobs import distribution_worker
+from crm_cskh.p2_models import ensure_p2_indexes, ensure_p2_seeds
+from crm_cskh.p3_models import ensure_p3_indexes, ensure_p3_seeds
+from crm_cskh.services import contact_attempt, distribution, eligibility, import_service, ownership
+from crm_cskh.services.errors import Conflict, Forbidden, InvalidRequest
+from crm_cskh.services.kpi_periods import resolve_period_spec
+from crm_cskh.services.kpi_runs import execute_kpi_recompute
+from crm_cskh.tests.p1_base import P1TestCase
+
+
+class TestP4SecurityAndScaleGaps(P1TestCase):
+	def setUp(self):
+		super().setUp()
+		frappe.set_user("Administrator")
+		ensure_p2_indexes()
+		ensure_p2_seeds()
+		ensure_p3_indexes()
+		ensure_p3_seeds()
+		self._prev_hier = frappe.db.get_single_value("FCRM Settings", "enable_sales_hierarchy")
+		frappe.db.set_single_value("FCRM Settings", "enable_sales_hierarchy", 1)
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		frappe.db.rollback()
+		frappe.db.set_single_value("FCRM Settings", "enable_sales_hierarchy", self._prev_hier or 1)
+		frappe.db.set_value("User", self.staff_a, "enabled", 1)
+		frappe.db.set_value("User", self.staff_b, "enabled", 1)
+		frappe.db.set_value("User", self.staff_c, "enabled", 1)
+		ldr_doc = frappe.get_doc("User", self.leader_a)
+		cur_roles = {r.role for r in ldr_doc.roles}
+		for req_role in ("Sales Manager", "Sales User"):
+			if req_role not in cur_roles:
+				ldr_doc.add_roles(req_role)
+		frappe.clear_cache(user=self.leader_a)
+		frappe.db.commit()
+		super().tearDown()
+
+	def _make_child_records(self, lead_name: str) -> dict[str, str]:
+		call_name = (
+			frappe.get_doc(
+				{
+					"doctype": "CRM Call Log",
+					"id": f"P4-CL-{frappe.generate_hash(length=10)}",
+					"from": "+842873009901",
+					"to": frappe.db.get_value("CRM Lead", lead_name, "mobile_no") or "0909111222",
+					"type": "Outgoing",
+					"status": "Completed",
+					"duration": 35,
+					"start_time": now_datetime() - timedelta(minutes=3),
+					"end_time": now_datetime() - timedelta(minutes=2),
+					"caller": self.staff_a,
+					"telephony_medium": "Manual",
+					"reference_doctype": "CRM Lead",
+					"reference_docname": lead_name,
+				}
+			)
+			.insert(ignore_permissions=True)
+			.name
+		)
+		note_name = (
+			frappe.get_doc(
+				{
+					"doctype": "FCRM Note",
+					"title": "Ghi chú P4 S13",
+					"content": "Nội dung nội bộ P4 S13",
+					"reference_doctype": "CRM Lead",
+					"reference_docname": lead_name,
+				}
+			)
+			.insert(ignore_permissions=True)
+			.name
+		)
+		file_name = (
+			frappe.get_doc(
+				{
+					"doctype": "File",
+					"file_name": f"p4-s13-{lead_name}.txt",
+					"is_private": 1,
+					"attached_to_doctype": "CRM Lead",
+					"attached_to_name": lead_name,
+					"content": f"private payload {lead_name}",
+				}
+			)
+			.insert(ignore_permissions=True)
+			.name
+		)
+		return {"call_log": call_name, "note": note_name, "file": file_name}
+
+	def test_role_downgrade_revokes_hierarchy_subtree_without_manual_clear_cache(self):
+		"""`role-change`: Removing `Sales Manager` from a group hierarchy node owner immediately revokes subordinate access."""
+		frappe.set_user("Administrator")
+		campaign = self.make_campaign(team_scope=self.team_a)
+		lead_a = self.make_canonical_lead()
+		children = self._make_child_records(lead_a)
+		wi_a = self.make_work_item(campaign, lead_a)
+		frappe.set_user(self.admin_user)
+		ownership.assign(wi_a, self.staff_a, actor=self.admin_user, request_id=self.unique_key("rc-asgn"))
+
+		# Before role downgrade: `leader_a` (`Sales Manager` + `Sales User`) can read subordinate `lead_a` & children.
+		frappe.set_user(self.leader_a)
+		self.assertTrue(permissions.user_in_scope(self.leader_a, self.staff_a))
+		self.assertTrue(frappe.has_permission("CRM Lead", "read", lead_a, throw=False))
+		self.assertIn(lead_a, frappe.get_list("CRM Lead", filters={"name": lead_a}, pluck="name"))
+
+		# Downgrade `leader_a` via `User.save()` (keeping `CRM Sales Hierarchy` group node `self.team_a` intact!).
+		frappe.set_user("Administrator")
+		ldr_doc = frappe.get_doc("User", self.leader_a)
+		ldr_doc.roles = [r for r in ldr_doc.roles if r.role != "Sales Manager"]
+		ldr_doc.save(ignore_permissions=True)
+
+		# Without manual `frappe.clear_cache()`, `on_user_security_change` + `permissions.py` revoke subtree access:
+		frappe.set_user(self.leader_a)
+		self.assertFalse(permissions.user_in_scope(self.leader_a, self.staff_a))
+		self.assertFalse(frappe.has_permission("CRM Lead", "read", lead_a, throw=False))
+		self.assertEqual(frappe.get_list("CRM Lead", filters={"name": lead_a}, pluck="name"), [])
+		for dt, docname in (
+			("CRM Lead", lead_a),
+			("CSKH Work Item", wi_a),
+			("CRM Call Log", children["call_log"]),
+			("FCRM Note", children["note"]),
+			("File", children["file"]),
+		):
+			with self.subTest(doctype=dt), self.assertRaises(frappe.PermissionError):
+				frappe.get_doc(dt, docname).check_permission("read")
+		with self.assertRaises(Forbidden):
+			workflow_api.get_work_item(work_item=wi_a)
+
+	def test_s13_and_s14_handoff_a_to_b_to_a_denies_old_ids_and_passes_reconciliation(self):
+		"""`P4-S13` & `P4-S14`: `A -> B` denies old record IDs; `A -> B -> A` purges duplicate ToDos & child DocShares."""
+		frappe.set_user("Administrator")
+		campaign = self.make_campaign(team_scope=self.team_a)
+		lead = self.make_canonical_lead()
+		children = self._make_child_records(lead)
+		wi = self.make_work_item(campaign, lead)
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead,
+				"campaign": campaign,
+				"work_item": wi,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.admin_user)
+		ownership.assign(wi, self.staff_a, actor=self.admin_user, request_id=self.unique_key("s13-a1"))
+
+		due_str = add_days(now_datetime(), 1).strftime("%Y-%m-%d 10:00:00")
+		frappe.set_user(self.staff_a)
+		att = workflow_api.record_attempt(
+			work_item=wi,
+			channel="phone_call",
+			outcome_code="connected_interested",
+			call_log=children["call_log"],
+			note="Trao đổi P4 S13",
+			followup_due_at=due_str,
+			followup_title="Hẹn gọi lại S13",
+			idempotency_key=self.unique_key("s13-att1"),
+		)
+		attempt_id = att["attempt_id"]
+		task_id = att["callback_task"]
+		todo_a_old = frappe.db.get_value(
+			"ToDo",
+			{
+				"reference_type": "CRM Lead",
+				"reference_name": lead,
+				"allocated_to": self.staff_a,
+				"status": "Open",
+			},
+			"name",
+		)
+		self.assertTrue(todo_a_old)
+
+		# Inject an extra duplicate `Open` ToDo for `staff_a` AND stray child `DocShare`s to prove `S14` deep cleanup:
+		frappe.set_user("Administrator")
+		extra_todo = (
+			frappe.get_doc(
+				{
+					"doctype": "ToDo",
+					"allocated_to": self.staff_a,
+					"reference_type": "CRM Lead",
+					"reference_name": lead,
+					"description": "Duplicate stale ToDo",
+					"status": "Open",
+				}
+			)
+			.insert(ignore_permissions=True)
+			.name
+		)
+		for child_dt, child_name in (
+			("CRM Call Log", children["call_log"]),
+			("CRM Task", task_id),
+			("FCRM Note", children["note"]),
+			("File", children["file"]),
+		):
+			frappe.share.add_docshare(
+				child_dt,
+				child_name,
+				self.staff_a,
+				read=1,
+				flags={"ignore_share_permission": True},
+			)
+
+		# Step 1 (`S13`): Handoff `A -> B` -> `staff_a` MUST lose access to EVERY record ID!
+		frappe.set_user(self.admin_user)
+		ownership.reassign(
+			wi,
+			expected_owner=self.staff_a,
+			target_user=self.staff_b,
+			actor=self.admin_user,
+			reason="Chuyển A sang B kiểm định S13",
+			request_id=self.unique_key("s13-a2b"),
+		)
+
+		frappe.set_user(self.staff_a)
+		with self.assertRaises(Forbidden):
+			workflow_api.get_work_item(work_item=wi)
+		with self.assertRaises(Forbidden):
+			workflow_api.list_attempts(work_item=wi)
+		for dt, old_id in (
+			("CRM Lead", lead),
+			("CSKH Work Item", wi),
+			("CSKH Contact Attempt", attempt_id),
+			("CRM Call Log", children["call_log"]),
+			("CRM Task", task_id),
+			("FCRM Note", children["note"]),
+			("File", children["file"]),
+			("ToDo", todo_a_old),
+			("ToDo", extra_todo),
+		):
+			with self.subTest(step="after_A_to_B", doctype=dt), self.assertRaises(frappe.PermissionError):
+				frappe.get_doc(dt, old_id).check_permission("read")
+
+		# Step 2 (`S14`): Handoff `B -> A` (`A -> B -> A`) -> zero residual shares/ToDos for `B` & PASS reconciliation!
+		frappe.set_user("Administrator")
+		frappe.share.add_docshare(
+			"CRM Task", task_id, self.staff_b, read=1, flags={"ignore_share_permission": True}
+		)
+		frappe.set_user(self.admin_user)
+		ownership.reassign(
+			wi,
+			expected_owner=self.staff_b,
+			target_user=self.staff_a,
+			actor=self.admin_user,
+			reason="Chuyển trả B về A kiểm định S14",
+			request_id=self.unique_key("s14-b2a"),
+		)
+
+		frappe.set_user("Administrator")
+		lead_shares = frappe.get_all(
+			"DocShare",
+			filters={"share_doctype": "CRM Lead", "share_name": lead},
+			pluck="user",
+		)
+		self.assertEqual(lead_shares, [self.staff_a])
+		child_shares = frappe.get_all(
+			"DocShare",
+			filters={
+				"share_doctype": ["in", ["CRM Call Log", "CRM Task", "FCRM Note", "File"]],
+				"share_name": ["in", [children["call_log"], task_id, children["note"], children["file"]]],
+				"user": ["!=", self.staff_a],
+			},
+			pluck="name",
+		)
+		self.assertEqual(child_shares, [])
+		open_todos = frappe.get_all(
+			"ToDo",
+			filters={"reference_type": "CRM Lead", "reference_name": lead, "status": "Open"},
+			pluck="allocated_to",
+		)
+		self.assertEqual(open_todos, [self.staff_a])
+
+		rec = distribution.reconcile(campaign, actor=self.admin_user)
+		self.assertEqual(rec["stale_docshares"], 0)
+		self.assertEqual(rec["stale_open_todos"], 0)
+		self.assertTrue(rec["ownership_reconciled"])
+
+	def test_disabled_user_session_purge_and_allocation_exclusion_all_paths(self):
+		"""`disabled-user`: Disabling a user purges sessions and blocks/excludes allocation across all paths."""
+		frappe.set_user("Administrator")
+		campaign = self.make_campaign(team_scope=self.team_a)
+		self.make_rule(campaign, self.staff_a, weight=60)
+		self.make_rule(campaign, self.staff_b, weight=40)
+		leads = [self.make_canonical_lead() for _ in range(4)]
+		frappe.db.set_value("CSKH Campaign", campaign, "selection_json", frappe.as_json({"leads": leads}))
+
+		# Insert synthetic session row for `staff_a` and verify `User.save(enabled=0)` purges it automatically
+		fake_sid = f"p4testsid{frappe.generate_hash(length=24)}"
+		frappe.db.sql(
+			"""insert into `tabSessions` (`user`, `sid`, `sessiondata`, `ipaddress`, `lastupdate`, `status`)
+			   values (%s, %s, '{}', '127.0.0.1', %s, 'Active')""",
+			(self.staff_a, fake_sid, now_datetime()),
+		)
+		self.assertEqual(
+			int(frappe.db.sql("select count(*) from `tabSessions` where sid = %s", (fake_sid,))[0][0]),
+			1,
+		)
+
+		prev = distribution.preview(
+			campaign, actor=self.admin_user, idempotency_key=self.unique_key("dis-prev1")
+		)
+
+		# Disable `staff_a` via `User.save()` AFTER preview!
+		u_a = frappe.get_doc("User", self.staff_a)
+		u_a.enabled = 0
+		u_a.save(ignore_permissions=True)
+
+		self.assertEqual(
+			int(frappe.db.sql("select count(*) from `tabSessions` where sid = %s", (fake_sid,))[0][0]),
+			0,
+		)
+
+		# 1. If `staff_b` is ALSO disabled after preview, `enqueue_run` MUST reject with `409 CAPACITY_FULL`!
+		frappe.db.set_value("User", self.staff_b, "enabled", 0)
+		with self.assertRaises(Conflict) as cap_ctx:
+			distribution.enqueue_run(prev["preview_id"], actor=self.admin_user, enqueue_job=False)
+		self.assertEqual(cap_ctx.exception.code, "CAPACITY_FULL")
+
+		# 2. Re-enable `staff_b` while `staff_a` stays disabled: `staff_a` gets `0` items and is listed in `excluded_assignees`!
+		frappe.db.set_value("User", self.staff_b, "enabled", 1)
+		with mock.patch("frappe.enqueue"):
+			enq = distribution.enqueue_run(prev["preview_id"], actor=self.admin_user, enqueue_job=True)
+		frappe.db.commit()
+		try:
+			done = distribution_worker.run_distribution(enq["run_id"], actor=self.admin_user)
+			self.assertEqual(done["status"], "completed")
+			self.assertEqual(done["assigned"].get(self.staff_a, 0), 0)
+			self.assertEqual(done["assigned"].get(self.staff_b, 0), 4)
+			excl_reasons = {e["user"]: e["reason"] for e in done["excluded_assignees"]}
+			self.assertEqual(excl_reasons.get(self.staff_a), "user_disabled")
+
+			# 3. Manual `assign`, `reassign`, and `reopen_work_item` all reject disabled `staff_a`!
+			extra_lead = self.make_canonical_lead()
+			extra_wi = self.make_work_item(campaign, extra_lead)
+			with self.assertRaises(InvalidRequest):
+				ownership.assign(
+					extra_wi, self.staff_a, actor=self.admin_user, request_id=self.unique_key("dis-asgn")
+				)
+
+			assigned_wi = frappe.get_all(
+				"CSKH Work Item", filters={"campaign": campaign, "assigned_to": self.staff_b}, pluck="name"
+			)[0]
+			with self.assertRaises(InvalidRequest):
+				ownership.reassign(
+					assigned_wi,
+					expected_owner=self.staff_b,
+					target_user=self.staff_a,
+					actor=self.admin_user,
+					reason="test disabled target",
+					request_id=self.unique_key("dis-reasgn"),
+				)
+			frappe.set_user(self.staff_b)
+			contact_attempt.close_work_item(
+				work_item=assigned_wi,
+				completion_reason="Đóng hồ sơ dữ liệu trùng kiểm thử",
+				close_category="invalid_or_duplicate",
+				idempotency_key=self.unique_key("dis-close"),
+				actor=self.staff_b,
+			)
+			frappe.set_user(self.admin_user)
+			with self.assertRaises(InvalidRequest):
+				contact_attempt.reopen_work_item(
+					work_item=assigned_wi,
+					target_user=self.staff_a,
+					reason="Thử mở lại cho user bị khóa",
+					idempotency_key=self.unique_key("dis-reopen"),
+					actor=self.admin_user,
+				)
+		finally:
+			frappe.set_user("Administrator")
+			w_ids = frappe.get_all("CSKH Work Item", filters={"campaign": campaign}, pluck="name")
+			if w_ids:
+				frappe.db.delete("CSKH SLA Obligation", {"work_item": ["in", w_ids]})
+				frappe.db.delete("CSKH Assignment History", {"work_item": ["in", w_ids]})
+			frappe.db.delete("CSKH Active Claim", {"campaign": campaign})
+			frappe.db.delete("CSKH Work Item", {"campaign": campaign})
+			frappe.db.delete("CSKH Distribution Run", {"campaign": campaign})
+			frappe.db.delete("CSKH Assignment Rule", {"campaign": campaign})
+			frappe.db.delete("CSKH Campaign", {"name": campaign})
+			all_l = [*leads]
+			frappe.db.delete("ToDo", {"reference_type": "CRM Lead", "reference_name": ["in", all_l]})
+			frappe.db.delete("DocShare", {"share_doctype": "CRM Lead", "share_name": ["in", all_l]})
+			frappe.db.delete("CSKH Identity Index", {"canonical_lead": ["in", all_l]})
+			frappe.db.delete("CRM Lead", {"name": ["in", all_l]})
+			frappe.db.commit()
+
+	def test_bulk_eligibility_import_and_kpi_drilldown_index_parity(self):
+		"""`G18`: Bulk eligibility (>50), bulk CSV classify (>50), and SQL-aggregated drill-down match single-row oracles."""
+		frappe.set_user("Administrator")
+		campaign = self.make_campaign(team_scope=self.team_a)
+		leads_55 = [self.make_canonical_lead() for _ in range(55)]
+		# Inject exclusions: 1 DNC, 1 existing WI in campaign, 1 active claim in other campaign
+		frappe.db.set_value("CRM Lead", leads_55[0], "cskh_do_not_contact", 1)
+		self.make_work_item(campaign, leads_55[1])
+		other_camp = self.make_campaign(team_scope=self.team_b)
+		other_wi = self.make_work_item(other_camp, leads_55[2], status="assigned", assigned_to=self.staff_c)
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": leads_55[2],
+				"campaign": other_camp,
+				"work_item": other_wi,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.db.set_value("CSKH Campaign", campaign, "selection_json", frappe.as_json({"leads": leads_55}))
+		bulk_res = eligibility.eligible_leads(campaign)
+		expected_excl = [
+			{"lead": ld, "reason": r}
+			for ld in leads_55
+			if (r := eligibility._lead_exclusion_reason(campaign, ld))
+		]
+		self.assertEqual(bulk_res["excluded"], expected_excl)
+		self.assertEqual(len(bulk_res["eligible"]), 52)
+
+		# Bulk CSV `_classify` (>50 rows) parity check
+		existing_ph = frappe.db.get_value(
+			"CSKH Identity Index", {"canonical_lead": leads_55[3]}, "normalized_phone"
+		)
+		rows_60 = [{"row_number": 2, "cells": {"phone": existing_ph, "name": "Dup CRM"}}]
+		for idx in range(55):
+			rows_60.append(
+				{"row_number": idx + 3, "cells": {"phone": f"09678{idx:05d}", "name": f"New {idx}"}}
+			)
+		rows_60.append({"row_number": 58, "cells": {"phone": "0967800001", "name": "Dup File"}})
+		rows_60.append({"row_number": 59, "cells": {"phone": "INVALID", "name": "Bad"}})
+		cls_res = import_service._classify(
+			rows_60, {"phone": "phone", "name": "name"}, "phone", name_column="name"
+		)
+		self.assertEqual(cls_res["total_rows"], 58)
+		self.assertEqual(cls_res["new_rows"], 55)
+		self.assertEqual(cls_res["duplicate_rows"], 2)
+		self.assertEqual(cls_res["error_rows"], 1)
+
+		# KPI Snapshot index usage & drill-down reconciliation check
+		wi_kpi = self.make_work_item(campaign, leads_55[4])
+		frappe.set_user(self.admin_user)
+		ownership.assign(wi_kpi, self.staff_a, actor=self.admin_user, request_id=self.unique_key("kpi-asgn"))
+		frappe.set_user(self.staff_a)
+		workflow_api.record_attempt(
+			work_item=wi_kpi,
+			channel="phone_call",
+			outcome_code="connected_interested",
+			note="KPI drilldown check",
+			idempotency_key=self.unique_key("kpi-att"),
+		)
+		frappe.set_user("Administrator")
+		now_dt = now_datetime()
+		m_key = f"{now_dt.year:04d}-{now_dt.month:02d}"
+		execute_kpi_recompute(resolve_period_spec("monthly", m_key), run_mode="full", actor="Administrator")
+
+		plan = frappe.db.sql(
+			"""EXPLAIN SELECT name, metrics_json FROM `tabCSKH KPI Snapshot` USE INDEX (idx_cskh_kpisnap_lookup)
+			   WHERE is_latest_published = 1 AND period_type = 'monthly'
+			     AND period_key = %s AND campaign_filter = '' AND scope_type = 'company' AND scope_id = '__company__'""",
+			(m_key,),
+			as_dict=True,
+		)
+		self.assertTrue(plan and plan[0].get("key") == "idx_cskh_kpisnap_lookup", plan)
+
+		frappe.set_user(self.bod_user)
+		dd = p3_api.get_metric_drilldown(
+			metric_code="CONNECTED_RATE",
+			period_type="monthly",
+			period_key=m_key,
+			scope_type="company",
+			page=1,
+			page_size=50,
+		)
+		snap_m = dd["drilldown_context"]["snapshot_metric"]
+		self.assertIsNotNone(snap_m)
+		self.assertEqual(dd["pagination"]["total"], snap_m["denominator"])
+		frappe.db.rollback()
+
+	def test_cskh_context_csrf_token_concurrent_session_init_recovery(self):
+		"""Verify cskh_context._get_or_init_csrf_token recovers from MariaDB Error 1020 on tabSessions while keeping RBAC/CSRF."""
+		from unittest.mock import patch
+
+		from crm_cskh.www import cskh_context
+
+		frappe.set_user("Guest")
+		with self.assertRaises(frappe.PermissionError):
+			cskh_context.build_context(
+				frappe._dict(), route="/cskh/my-customers", allowed_roles=cskh_context.READ_ROLES
+			)
+
+		frappe.set_user(self.staff_a)
+		with self.assertRaises(frappe.PermissionError):
+			cskh_context.build_context(
+				frappe._dict(),
+				route="/cskh/import",
+				allowed_roles=cskh_context.IMPORT_ROLES,
+				require_admin=True,
+			)
+
+		sess_data = getattr(getattr(frappe.local, "session", None), "data", None)
+		orig_tok = getattr(sess_data, "csrf_token", None) if sess_data is not None else None
+		orig_hget = frappe.cache.hget
+		try:
+			if sess_data is not None:
+				sess_data.csrf_token = None
+			expected_tok = "csrf-recovered-from-concurrent-session-update-1020"
+
+			def _fake_hget(name, key, *args, **kwargs):
+				if name == "session":
+					return {"data": {"csrf_token": expected_tok}}
+				return orig_hget(name, key, *args, **kwargs)
+
+			with (
+				patch.object(
+					frappe.sessions,
+					"get_csrf_token",
+					side_effect=frappe.QueryDeadlockError(
+						"(1020, \"Record has changed since last read in table 'tabSessions'; try restarting transaction\")"
+					),
+				),
+				patch.object(
+					frappe.cache,
+					"hget",
+					side_effect=_fake_hget,
+				),
+			):
+				ctx = cskh_context.build_context(
+					frappe._dict(),
+					route="/cskh/my-customers",
+					allowed_roles=cskh_context.READ_ROLES,
+				)
+				self.assertEqual(ctx.csrf_token, expected_tok)
+				self.assertEqual(ctx.cskh_csrf_header, {"X-Frappe-CSRF-Token": expected_tok})
+				if sess_data is not None:
+					self.assertEqual(sess_data.csrf_token, expected_tok)
+		finally:
+			if sess_data is not None:
+				sess_data.csrf_token = orig_tok
+			frappe.set_user("Administrator")
+
+	def test_bg01_batch_vs_per_item_distribution_exact_domain_parity(self):
+		"""Verify batched `_batch_assign_chunk` + `deliver_assignments_batch` matches legacy per-item distribution 1-to-1."""
+		import json
+
+		from crm_cskh.services import notifications
+
+		frappe.set_user("Administrator")
+		leads_batch = [self.make_canonical_lead() for _ in range(12)]
+		leads_legacy = [self.make_canonical_lead() for _ in range(12)]
+
+		# Seed stale pre-existing lead/child DocShares and Open ToDos on index 0 of both sets.
+		for ld0 in (leads_batch[0], leads_legacy[0]):
+			children = self._make_child_records(ld0)
+			frappe.share.add("CRM Lead", ld0, self.staff_outside, read=1, write=1)
+			frappe.share.add("CRM Call Log", children["call_log"], self.staff_outside, read=1, write=0)
+			frappe.get_doc(
+				{
+					"doctype": "ToDo",
+					"allocated_to": self.staff_outside,
+					"reference_type": "CRM Lead",
+					"reference_name": ld0,
+					"description": "Stale ToDo before campaign distribution",
+					"status": "Open",
+				}
+			).insert(ignore_permissions=True)
+
+		camp_batch = self.make_campaign(team_scope=self.team_a, selection={"leads": leads_batch})
+		camp_legacy = self.make_campaign(team_scope=self.team_a, selection={"leads": leads_legacy})
+		for camp in (camp_batch, camp_legacy):
+			self.make_rule(camp, self.staff_a, weight=2, capacity=8, team=self.team_a)
+			self.make_rule(camp, self.staff_b, weight=1, capacity=8, team=self.team_a)
+		frappe.db.sql("delete from `tabCSKH Dirty Scope`")
+		frappe.db.commit()
+
+		orig_batch_fn = distribution._batch_assign_chunk
+		batch_calls: list[int] = []
+
+		def _spy_batch_fn(**kwargs):
+			batch_calls.append(len(kwargs["chunk"]))
+			return orig_batch_fn(**kwargs)
+
+		with mock.patch.object(distribution, "_batch_assign_chunk", side_effect=_spy_batch_fn):
+			prev_b = distribution.preview(
+				camp_batch, actor=self.admin_user, idempotency_key=self.unique_key("p4-bpar-prev")
+			)
+			res_b = distribution.execute(
+				prev_b["preview_id"],
+				expected_rule_version=prev_b["rule_version"],
+				actor=self.admin_user,
+				idempotency_key=self.unique_key("p4-bpar-exec"),
+			)
+		self.assertEqual(batch_calls, [12])
+		self.assertEqual(res_b["status"], "completed")
+		self.assertEqual(res_b["created"], 12)
+
+		orig_assign = ownership.assign
+		orig_deliver = notifications.deliver_assignment
+		with (
+			mock.patch.object(ownership, "assign", side_effect=orig_assign),
+			mock.patch.object(notifications, "deliver_assignment", side_effect=orig_deliver),
+		):
+			prev_l = distribution.preview(
+				camp_legacy, actor=self.admin_user, idempotency_key=self.unique_key("p4-lpar-prev")
+			)
+			res_l = distribution.execute(
+				prev_l["preview_id"],
+				expected_rule_version=prev_l["rule_version"],
+				actor=self.admin_user,
+				idempotency_key=self.unique_key("p4-lpar-exec"),
+			)
+		self.assertEqual(res_l["status"], "completed")
+		self.assertEqual(res_l["created"], 12)
+
+		rec_b = distribution.reconcile(camp_batch, actor=self.admin_user)
+		rec_l = distribution.reconcile(camp_legacy, actor=self.admin_user)
+		self.assertTrue(rec_b["ownership_reconciled"])
+		self.assertEqual(
+			{k: v for k, v in rec_b.items() if k not in ("campaign", "as_of")},
+			{k: v for k, v in rec_l.items() if k not in ("campaign", "as_of")},
+		)
+
+		for idx in range(12):
+			lb = leads_batch[idx]
+			ll = leads_legacy[idx]
+			wi_b = frappe.db.get_value(
+				"CSKH Work Item",
+				{"campaign": camp_batch, "lead": lb},
+				["name", "status", "assigned_to", "attempt_count"],
+				as_dict=True,
+			)
+			wi_l = frappe.db.get_value(
+				"CSKH Work Item",
+				{"campaign": camp_legacy, "lead": ll},
+				["name", "status", "assigned_to", "attempt_count"],
+				as_dict=True,
+			)
+			self.assertEqual(wi_b.status, "assigned")
+			self.assertEqual(wi_b.assigned_to, wi_l.assigned_to)
+			self.assertEqual(int(wi_b.attempt_count or 0), int(wi_l.attempt_count or 0))
+			owner = wi_b.assigned_to
+
+			self.assertEqual(
+				frappe.db.get_value("CSKH Active Claim", {"lead": lb}, "work_item"),
+				wi_b.name,
+			)
+			hist_b = frappe.db.get_value(
+				"CSKH Assignment History",
+				{"work_item": wi_b.name, "ownership_end": ["is", "not set"]},
+				[
+					"event_id",
+					"action",
+					"to_user",
+					"team_at_assignment",
+					"attribution_status",
+					"reason",
+					"distribution_run",
+				],
+				as_dict=True,
+			)
+			hist_l = frappe.db.get_value(
+				"CSKH Assignment History",
+				{"work_item": wi_l.name, "ownership_end": ["is", "not set"]},
+				[
+					"action",
+					"to_user",
+					"team_at_assignment",
+					"attribution_status",
+				],
+				as_dict=True,
+			)
+			self.assertEqual(
+				hist_b.event_id,
+				ownership._event_id(f"run:{res_b['run_id']}:{lb}", wi_b.name, ownership.ASSIGN),
+			)
+			self.assertEqual(hist_b.distribution_run, res_b["run_id"])
+			self.assertEqual(hist_b.reason, f"Distribution run {res_b['run_id']}")
+			self.assertEqual(hist_b.action, hist_l.action)
+			self.assertEqual(hist_b.to_user, hist_l.to_user)
+			self.assertEqual(hist_b.team_at_assignment, hist_l.team_at_assignment)
+			self.assertEqual(hist_b.attribution_status, hist_l.attribution_status)
+
+			obs_b = frappe.get_all(
+				"CSKH SLA Obligation",
+				filters={"work_item": wi_b.name},
+				fields=[
+					"obligation_type",
+					"owner_user",
+					"team_at_obligation",
+					"attribution_status",
+					"status",
+					"policy_name_snapshot",
+				],
+				order_by="obligation_type asc",
+			)
+			obs_l = frappe.get_all(
+				"CSKH SLA Obligation",
+				filters={"work_item": wi_l.name},
+				fields=[
+					"obligation_type",
+					"owner_user",
+					"team_at_obligation",
+					"attribution_status",
+					"status",
+					"policy_name_snapshot",
+				],
+				order_by="obligation_type asc",
+			)
+			self.assertEqual([o.obligation_type for o in obs_b], ["FIRST_ATTEMPT", "FIRST_CONNECTED"])
+			self.assertEqual(obs_b, obs_l)
+
+			lead_row_b = frappe.db.get_value("CRM Lead", lb, ["lead_owner", "_assign"], as_dict=True)
+			self.assertEqual(lead_row_b.lead_owner, owner)
+			self.assertEqual(json.loads(lead_row_b._assign or "[]"), [owner])
+
+			shares_b = frappe.get_all(
+				"DocShare",
+				filters={"share_doctype": "CRM Lead", "share_name": lb},
+				fields=["user", "read", "write"],
+			)
+			self.assertEqual(len(shares_b), 1)
+			self.assertEqual(shares_b[0].user, owner)
+			self.assertEqual(int(shares_b[0].read), 1)
+			self.assertEqual(int(shares_b[0].write), 1)
+
+			open_todos_b = frappe.get_all(
+				"ToDo",
+				filters={"reference_type": "CRM Lead", "reference_name": lb, "status": "Open"},
+				fields=["allocated_to"],
+			)
+			self.assertEqual([t.allocated_to for t in open_todos_b], [owner])
+
+			notifs_b = frappe.get_all(
+				"CRM Notification",
+				filters={
+					"reference_doctype": "CRM Lead",
+					"reference_name": lb,
+					"to_user": owner,
+					"type": "Assignment",
+				},
+				fields=["message", "read"],
+			)
+			self.assertGreaterEqual(len(notifs_b), 1)
+			self.assertEqual(int(notifs_b[0].read), 0)
+			self.assertIn("Bạn được phân công hồ sơ liên hệ", notifs_b[0].message)
+
+		dirty_b = {
+			(d.team_node, d.owner_user, d.reason, d.status)
+			for d in frappe.get_all(
+				"CSKH Dirty Scope",
+				filters={"campaign": camp_batch},
+				fields=["team_node", "owner_user", "reason", "status"],
+			)
+		}
+		dirty_l = {
+			(d.team_node, d.owner_user, d.reason, d.status)
+			for d in frappe.get_all(
+				"CSKH Dirty Scope",
+				filters={"campaign": camp_legacy},
+				fields=["team_node", "owner_user", "reason", "status"],
+			)
+		}
+		self.assertEqual(dirty_b, dirty_l)
+		self.assertGreaterEqual(len(dirty_b), 2)
+
+	def test_bg01_mid_batch_conflict_fallback_retry_and_complete_dirty_scope_drain(self):
+		"""Verify mid-batch error rolls back cleanly to per-item fallback, retry assigns each item once, and Dirty Scope drains completely."""
+		from crm_cskh.services import kpi_runs
+
+		frappe.set_user("Administrator")
+		leads = [self.make_canonical_lead() for _ in range(10)]
+		camp = self.make_campaign(team_scope=self.team_a, selection={"leads": leads})
+		self.make_rule(camp, self.staff_a, weight=1, capacity=10, team=self.team_a)
+		self.make_rule(camp, self.staff_b, weight=1, capacity=10, team=self.team_a)
+
+		frappe.db.sql("delete from `tabCSKH Dirty Scope`")
+		frappe.db.commit()
+
+		prev = distribution.preview(
+			camp, actor=self.admin_user, idempotency_key=self.unique_key("p4-retry-prev")
+		)
+		self.assertEqual(prev["summary"]["eligible_count"], 10)
+
+		# 1. Force `_batch_assign_chunk` to fail AFTER inserting all 10 rows inside `batch_savepoint`
+		#    (proving full savepoint rollback + pending dirty-event truncation), AND inject transient
+		#    `ToDo` failures on `leads[3]` and `leads[6]` inside `ownership._create_todo` during fallback.
+		orig_batch = distribution._batch_assign_chunk
+		orig_create_todo = ownership._create_todo
+		failed_once = {"batch": False, "row3": False, "row6": False}
+
+		def _flaky_batch(**kwargs):
+			res = orig_batch(**kwargs)
+			if not failed_once["batch"]:
+				failed_once["batch"] = True
+				self.assertEqual(frappe.db.count("CSKH Work Item", {"campaign": camp}), 10)
+				raise RuntimeError("simulated mid-batch DB error after bulk_insert")
+			return res
+
+		def _flaky_create_todo(lead, user, description):
+			if lead == leads[3] and not failed_once["row3"]:
+				failed_once["row3"] = True
+				raise RuntimeError("simulated transient ToDo sync error on lead 3")
+			if lead == leads[6] and not failed_once["row6"]:
+				failed_once["row6"] = True
+				raise RuntimeError("simulated transient ToDo sync error on lead 6")
+			return orig_create_todo(lead, user, description)
+
+		with (
+			mock.patch.object(distribution, "_batch_assign_chunk", side_effect=_flaky_batch),
+			mock.patch.object(ownership, "_create_todo", side_effect=_flaky_create_todo),
+		):
+			first_res = distribution.execute(
+				prev["preview_id"],
+				expected_rule_version=prev["rule_version"],
+				actor=self.admin_user,
+				idempotency_key=self.unique_key("p4-retry-exec-1"),
+			)
+
+		self.assertTrue(failed_once["batch"])
+		self.assertTrue(failed_once["row3"])
+		self.assertTrue(failed_once["row6"])
+		self.assertEqual(first_res["status"], "completed_with_errors")
+		self.assertEqual(first_res["created"], 8)
+		self.assertEqual(first_res["errors"], 2)
+		self.assertEqual(frappe.db.count("CSKH Work Item", {"campaign": camp}), 8)
+
+		# 2. Retry the same run: the 2 failed leads (`leads[3]` and `leads[6]`) must be assigned
+		#    cleanly via the batched path (`len == 2 > 1`) with 0 duplicates.
+		retry_res = distribution.execute(
+			prev["preview_id"],
+			expected_rule_version=prev["rule_version"],
+			actor=self.admin_user,
+			idempotency_key=self.unique_key("p4-retry-exec-2"),
+		)
+		self.assertEqual(retry_res["run_id"], first_res["run_id"])
+		self.assertEqual(retry_res["status"], "completed")
+		self.assertEqual(retry_res["created"], 10)
+		self.assertEqual(retry_res["errors"], 0)
+		dup_cnt = int(
+			frappe.db.sql(
+				"select count(*) - count(distinct lead) from `tabCSKH Work Item` where campaign = %s",
+				(camp,),
+			)[0][0]
+		)
+		self.assertEqual(dup_cnt, 0)
+		self.assertEqual(frappe.db.count("CSKH Work Item", {"campaign": camp}), 10)
+		self.assertEqual(frappe.db.count("CSKH Active Claim", {"campaign": camp}), 10)
+		self.assertEqual(
+			frappe.db.count("CSKH Assignment History", {"distribution_run": retry_res["run_id"]}),
+			10,
+		)
+		self.assertTrue(distribution.reconcile(camp, actor=self.admin_user)["ownership_reconciled"])
+
+		# 3. Also verify mid-chunk concurrent `CSKH Active Claim` race triggers savepoint fallback
+		#    and skips ONLY the raced lead (`reason == 'already_claimed'`) with 0 duplicates.
+		race_leads = [self.make_canonical_lead() for _ in range(4)]
+		race_camp = self.make_campaign(team_scope=self.team_a, selection={"leads": race_leads})
+		self.make_rule(race_camp, self.staff_a, weight=1, capacity=10, team=self.team_a)
+		other_camp = self.make_campaign(team_scope=self.team_b)
+		frappe.db.commit()
+
+		prev_race = distribution.preview(
+			race_camp, actor=self.admin_user, idempotency_key=self.unique_key("p4-race-prev")
+		)
+		enq_race = distribution.enqueue_run(
+			prev_race["preview_id"],
+			expected_rule_version=prev_race["rule_version"],
+			idempotency_key=self.unique_key("p4-race-enq"),
+			actor=self.admin_user,
+			enqueue_job=False,
+		)
+		frappe.db.commit()
+
+		orig_meta_sig = distribution._read_distribution_meta_sig
+		race_injected = {"done": False}
+
+		def _inject_concurrent_claim(team_scope):
+			sig = orig_meta_sig(team_scope)
+			if not race_injected["done"]:
+				race_injected["done"] = True
+				other_wi = self.make_work_item(
+					other_camp, race_leads[1], status="assigned", assigned_to=self.staff_c
+				)
+				frappe.get_doc(
+					{
+						"doctype": "CSKH Active Claim",
+						"lead": race_leads[1],
+						"campaign": other_camp,
+						"work_item": other_wi,
+					}
+				).insert(ignore_permissions=True)
+			return sig
+
+		with mock.patch.object(
+			distribution, "_read_distribution_meta_sig", side_effect=_inject_concurrent_claim
+		):
+			race_res = distribution.run_distribution_worker(enq_race["run_id"], actor=self.admin_user)
+
+		self.assertTrue(race_injected["done"])
+		self.assertEqual(race_res["status"], "completed_with_errors")
+		self.assertEqual(race_res["created"], 3)
+		self.assertEqual(race_res["errors"], 1)
+		self.assertEqual([s["lead"] for s in race_res["skipped"]], [race_leads[1]])
+		self.assertEqual([s["reason"] for s in race_res["skipped"]], ["active_claim_in_other_campaign"])
+		self.assertTrue(distribution.reconcile(race_camp, actor=self.admin_user)["ownership_reconciled"])
+
+		# 4. Drain all pending Dirty Scopes and confirm 100% completion (`0` pending left).
+		self.assertGreaterEqual(
+			frappe.db.count("CSKH Dirty Scope", {"campaign": camp, "status": "pending"}), 2
+		)
+		drain_out = kpi_runs.process_dirty_scopes()
+		self.assertGreaterEqual(drain_out["processed_scopes"], 2)
+		self.assertEqual(frappe.db.count("CSKH Dirty Scope", {"status": "pending"}), 0)
+		self.assertGreaterEqual(
+			frappe.db.count("CSKH Dirty Scope", {"campaign": camp, "status": "processed"}), 2
+		)
+
+	def test_bg01_sql_per_item_reduction_and_dirty_worker_enqueue_coalescing(self):
+		"""Verify 60-item chunk executes in < 2.0 SQL/item (vs 90.28 baseline) and coalesces Dirty Scope worker enqueue to 1 post-run flush."""
+		from crm_cskh.services import kpi_runs
+
+		frappe.set_user("Administrator")
+		leads = [self.make_canonical_lead() for _ in range(60)]
+		camp = self.make_campaign(team_scope=self.team_a, selection={"leads": leads})
+		self.make_rule(camp, self.staff_a, weight=1, capacity=60, team=self.team_a)
+		self.make_rule(camp, self.staff_b, weight=1, capacity=60, team=self.team_a)
+		frappe.db.commit()
+
+		prev = distribution.preview(
+			camp, actor=self.admin_user, idempotency_key=self.unique_key("p4-sql-prev")
+		)
+		enq = distribution.enqueue_run(
+			prev["preview_id"],
+			expected_rule_version=prev["rule_version"],
+			idempotency_key=self.unique_key("p4-sql-enq"),
+			actor=self.admin_user,
+			enqueue_job=False,
+		)
+		frappe.db.commit()
+
+		sql_count = 0
+		orig_sql = frappe.db.sql
+
+		def _counting_sql(query, *args, **kwargs):
+			nonlocal sql_count
+			sql_count += 1
+			return orig_sql(query, *args, **kwargs)
+
+		enqueue_events: list[tuple[str, str]] = []
+
+		def _spy_enqueue_worker():
+			run_status = str(frappe.db.get_value("CSKH Distribution Run", enq["run_id"], "status") or "")
+			enqueue_events.append((run_status, bool(frappe.flags.cskh_suppress_dirty_enqueue)))
+			return True
+
+		with (
+			mock.patch.object(frappe.db, "sql", side_effect=_counting_sql),
+			mock.patch.object(kpi_runs, "_enqueue_dirty_scopes_worker", side_effect=_spy_enqueue_worker),
+		):
+			worker_res = distribution.run_distribution_worker(enq["run_id"], actor=self.admin_user)
+
+		self.assertEqual(worker_res["status"], "completed")
+		self.assertEqual(worker_res["created"], 60)
+		sql_per_item = sql_count / 60.0
+		self.assertLess(
+			sql_per_item,
+			2.0,
+			f"Expected < 2.0 SQL/item for batched 60-item chunk, measured {sql_per_item:.3f} ({sql_count} SQL)",
+		)
+		# Coalesced dirty worker enqueue must fire ONCE, AFTER `run.status == 'completed'` is committed!
+		self.assertEqual(enqueue_events, [("completed", False)])
+		self.assertTrue(distribution.reconcile(camp, actor=self.admin_user)["ownership_reconciled"])

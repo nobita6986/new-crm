@@ -89,26 +89,28 @@ fixtures = [
 
 # required_apps = []
 
-# Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "crm_cskh",
-# 		"logo": "/assets/crm_cskh/logo.png",
-# 		"title": "CRM CSKH",
-# 		"route": "/crm_cskh",
-# 		"has_permission": "crm_cskh.api.permission.has_app_permission"
-# 	}
-# ]
+setup_wizard_requires = "/assets/crm_cskh/cskh/setup-wizard.js"
+
+# Each item in the list will be shown as an app in the apps page and CRM App Switcher
+add_to_apps_screen = [
+	{
+		"name": "crm_cskh",
+		"logo": "/assets/crm_cskh/cskh/logo.svg",
+		"title": "CSKH",
+		"route": "/cskh",
+		"has_permission": "crm_cskh.cskh_sidebar.has_app_permission",
+	}
+]
 
 # Includes in <head>
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/crm_cskh/css/crm_cskh.css"
+app_include_css = "/assets/crm_cskh/cskh/desk-theme.css"
 # app_include_js = "/assets/crm_cskh/js/crm_cskh.js"
 
 # include js, css files in header of web template
-# web_include_css = "/assets/crm_cskh/css/crm_cskh.css"
+web_include_css = "/assets/crm_cskh/cskh/web-theme.css"
 # web_include_js = "/assets/crm_cskh/js/crm_cskh.js"
 
 # include custom scss in every website theme (without file extension ".scss")
@@ -269,6 +271,9 @@ doc_events = {
 		"before_save": "crm_cskh.p3_models.guard_crm_holiday_list_mutation",
 		"on_trash": "crm_cskh.p3_models.guard_crm_holiday_list_mutation",
 	},
+	"User": {
+		"on_update": "crm_cskh.permissions.on_user_security_change",
+	},
 }
 
 override_whitelisted_methods = {
@@ -374,13 +379,19 @@ override_whitelisted_methods = {
 
 # Request Events
 # ----------------
-before_request = ["crm_cskh.i18n.set_guest_language", "crm_cskh.p1_errors.clear_p1_error_context"]
+before_request = [
+	"crm_cskh.i18n.set_guest_language",
+	"crm_cskh.p1_errors.clear_p1_error_context",
+	"crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks",
+]
 update_website_context = ["crm_cskh.i18n.update_website_context"]
 after_request = ["crm_cskh.errors.normalize_error_response", "crm_cskh.p1_errors.normalize_p1_error_response"]
 
-# Job Events
-# ----------
-# before_job = ["crm_cskh.utils.before_job"]
+# Job & Print Events
+# ------------------
+before_job = ["crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks"]
+before_tests = ["crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks"]
+on_print_pdf = ["crm_cskh.services.pdf_hooks.on_print_pdf"]
 # after_job = ["crm_cskh.utils.after_job"]
 
 # User Data Protection

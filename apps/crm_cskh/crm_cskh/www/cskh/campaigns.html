@@ -116,20 +116,22 @@
 	<div id="dist-runs-empty" class="cskh-alert is-empty" hidden>
 		{{ _("No data in the current scope.") }}
 	</div>
-	<table id="dist-runs-table" class="cskh-table" hidden>
-		<thead>
-			<tr>
-				<th>{{ _("Run ID") }}</th>
-				<th>{{ _("Campaign") }}</th>
-				<th>{{ _("Status") }}</th>
-				<th class="num">{{ _("Assigned in this run") }}</th>
-				<th class="num">{{ _("Failed") }}</th>
-				<th>{{ _("Created") }}</th>
-				<th></th>
-			</tr>
-		</thead>
-		<tbody id="dist-runs-rows"></tbody>
-	</table>
+	<div class="cskh-table-scroll">
+		<table id="dist-runs-table" class="cskh-table" hidden>
+			<thead>
+				<tr>
+					<th>{{ _("Run ID") }}</th>
+					<th>{{ _("Campaign") }}</th>
+					<th>{{ _("Status") }}</th>
+					<th class="num">{{ _("Assigned in this run") }}</th>
+					<th class="num">{{ _("Failed") }}</th>
+					<th>{{ _("Created") }}</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody id="dist-runs-rows"></tbody>
+		</table>
+	</div>
 	<div class="cskh-pager">
 		<button id="dist-runs-prev" class="cskh-btn" type="button">{{ _("Previous") }}</button>
 		<span id="dist-runs-range"></span>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="cskhBrandGrad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#4338CA"/>
+    </linearGradient>
+  </defs>
+  <rect width="24" height="24" rx="6.5" fill="url(#cskhBrandGrad)"/>
+  <path d="M6.5 13V11.5C6.5 8.46243 8.96243 6 12 6C15.0376 6 17.5 8.46243 17.5 11.5V13" stroke="#FFFFFF" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="5" y="12" width="3" height="5" rx="1.5" stroke="#FFFFFF" stroke-width="1.75"/>
+  <rect x="16" y="12" width="3" height="5" rx="1.5" stroke="#FFFFFF" stroke-width="1.75"/>
+  <path d="M17.5 17C17.5 18.3807 16.3807 19.5 15 19.5H13" stroke="#FFFFFF" stroke-width="1.75" stroke-linecap="round"/>
+</svg>

@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Hermetic clean-site & HTTP frontend asset verifier for the P4-01 custom image (G02).
+"""Hermetic clean-site, auth, Socket.IO & asset verifier for the P4 custom image (G02).
 
 Boots an isolated frappe_docker-style stack (`deploy/images/compose.verify.yaml`)
 using `APP_IMAGE`, provisions a brand-new Frappe site on empty volumes, installs
 `crm` + `crm_cskh`, runs `migrate` twice, verifies all 3 apps via `list-apps`,
-checks upstream Git SHAs and embedded dependency locks, and probes static & dynamic
-routes over HTTP through `frontend` (nginx) -> `backend` (gunicorn).
+checks upstream Git SHAs, security-patched Python packages (`PyJWT==2.15.1`,
+`pillow==13.0.0`) with `pip check` consistency and unmodified upstream `pyproject.toml`,
+pruned runtime OS packages, CSRF/session authentication,
+Socket.IO polling + RFC 6455 WebSocket upgrade, and static/dynamic HTTP routes
+through `frontend` (nginx) -> `backend` (gunicorn) & `websocket` (node).
 
 Ephemeral credentials exist only in a temporary directory outside the repository
 and are destroyed in `finally` together with all containers and volumes.
@@ -14,11 +17,14 @@ and are destroyed in `finally` together with all containers and volumes.
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import http.cookiejar
 import json
 import os
 import re
 import secrets
+import socket
 import subprocess
 import tempfile
 import time
@@ -32,6 +38,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 IMAGES_DIR = Path(__file__).resolve().parent
 LOCK_FILE = IMAGES_DIR / "release-lock.json"
 COMPOSE_FILE = IMAGES_DIR / "compose.verify.yaml"
+WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
 def run_cmd(
@@ -44,16 +51,23 @@ def run_cmd(
     merged_env = os.environ.copy()
     if env:
         merged_env.update(env)
-    return subprocess.run(
-        args,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        env=merged_env,
-        check=check,
-        timeout=timeout,
-    )
+    try:
+        return subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=merged_env,
+            check=check,
+            timeout=timeout,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"Command {args[:5]} failed (rc={exc.returncode}):\n"
+            f"STDOUT:\n{(exc.stdout or '')[-1500:]}\n"
+            f"STDERR:\n{(exc.stderr or '')[-1500:]}"
+        ) from exc
 
 
 class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -79,13 +93,16 @@ def http_request(
     host_header: str,
     method: str = "GET",
     form_data: dict[str, str] | None = None,
+    extra_headers: dict[str, str] | None = None,
     timeout: int = 20,
 ) -> tuple[int, dict[str, str], bytes]:
     body_bytes = None
     headers = {"Host": host_header, "Accept-Language": "vi-VN,vi;q=0.9"}
+    if extra_headers:
+        headers.update(extra_headers)
     if form_data is not None:
         body_bytes = urllib.parse.urlencode(form_data).encode("utf-8")
-        headers["Content-Type"] = "application/x-www-form-urlencoded"
+        headers.setdefault("Content-Type", "application/x-www-form-urlencoded")
     req = urllib.request.Request(url, data=body_bytes, headers=headers, method=method)
     try:
         with opener.open(req, timeout=timeout) as resp:
@@ -98,6 +115,55 @@ def http_request(
         data = exc.read() if exc.fp else b""
         hdrs = {k.lower(): v for k, v in exc.headers.items()} if exc.headers else {}
         return exc.code, hdrs, data
+
+
+def probe_socketio_websocket_upgrade(
+    port: int, site_name: str, cookie_header: str = "", timeout: int = 15
+) -> dict[str, object]:
+    ws_key = base64.b64encode(secrets.token_bytes(16)).decode("ascii")
+    expected_accept = base64.b64encode(
+        hashlib.sha1((ws_key + WS_GUID).encode("ascii")).digest()
+    ).decode("ascii")
+    req_lines = [
+        "GET /socket.io/?EIO=4&transport=websocket HTTP/1.1",
+        f"Host: {site_name}",
+        f"Origin: http://{site_name}",
+        "Upgrade: websocket",
+        "Connection: Upgrade",
+        f"Sec-WebSocket-Key: {ws_key}",
+        "Sec-WebSocket-Version: 13",
+    ]
+    if cookie_header:
+        req_lines.append(f"Cookie: {cookie_header}")
+    raw_req = ("\r\n".join(req_lines) + "\r\n\r\n").encode("utf-8")
+
+    with socket.create_connection(("127.0.0.1", port), timeout=timeout) as sock:
+        sock.settimeout(timeout)
+        sock.sendall(raw_req)
+        buf = b""
+        while b"\r\n\r\n" not in buf and len(buf) < 16384:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            buf += chunk
+
+    header_blob, _, remainder = buf.partition(b"\r\n\r\n")
+    lines = header_blob.decode("iso-8859-1", errors="replace").split("\r\n")
+    status_line = lines[0] if lines else ""
+    parts = status_line.split(" ", 2)
+    status_code = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else 0
+    resp_headers: dict[str, str] = {}
+    for line in lines[1:]:
+        if ":" in line:
+            k, v = line.split(":", 1)
+            resp_headers[k.strip().lower()] = v.strip()
+    actual_accept = resp_headers.get("sec-websocket-accept", "")
+    return {
+        "status_code": status_code,
+        "upgrade": resp_headers.get("upgrade", "").lower(),
+        "accept_valid": actual_accept == expected_accept,
+        "initial_frame_bytes": len(remainder),
+    }
 
 
 def wait_for_http_ping(
@@ -160,6 +226,12 @@ def main() -> int:
     expected_apps_tree = lock["apps_tree_sha"]
     expected_cskh_tree = lock["crm_cskh_tree_sha"]
     expected_load_order = lock["apps"]["load_order"]
+    expected_pyjwt_ver = lock["security_patches"]["pyjwt_version"]
+    expected_pillow_ver = lock["security_patches"]["pillow_version"]
+    expected_mariadb_deb_ver = lock["security_patches"].get(
+        "mariadb_client_debian_version"
+    )
+    expected_install_chromium = bool(lock["toolchain"].get("install_chromium", True))
 
     project_name = f"cskh-p4-verify-{secrets.token_hex(4)}"
     db_root_pw = secrets.token_hex(24)
@@ -243,8 +315,12 @@ def main() -> int:
                 labels.get("io.cskh.crm_cskh_tree_sha"),
             )
 
-            # 2. Boot isolated verification topology (zero /src bind-mounts)
-            run_cmd([*compose_base, "up", "-d"], env=compose_env, timeout=300)
+            # 2. Boot isolated verification topology (zero /src bind-mounts, --no-build)
+            run_cmd(
+                [*compose_base, "up", "-d", "--no-build"],
+                env=compose_env,
+                timeout=300,
+            )
 
             # Verify container mounts (no /src or host bind-mount) & port exposure boundaries
             ps_res = run_cmd([*compose_base, "ps", "--format", "json"], env=compose_env)
@@ -300,7 +376,7 @@ def main() -> int:
                 published_by_service.get("frontend"),
             )
 
-            # 3. Create clean site + install crm + install crm_cskh + migrate x2 (capture logs for schema/module audit)
+            # 3. Create clean site + install crm + install crm_cskh + migrate x2
             def exec_backend(
                 shell_cmd: str, extra_env: dict[str, str] | None = None
             ) -> subprocess.CompletedProcess[str]:
@@ -369,22 +445,56 @@ def main() -> int:
                 timeout=120,
             )
 
-            # 4. Inspect runtime bench state + CSKH Export Job schema/module audit inside container
+            # 4. Inspect runtime bench state + security patches + CSKH schema audit inside container
             probe_py = (
-                "import json, subprocess, frappe; "
+                "import importlib.metadata as im, io, json, subprocess, frappe, jwt; "
                 "from pathlib import Path; "
+                "from PIL import Image; "
+                "from frappe.utils.image import optimize_image; "
                 f"site = {args.site_name!r}; "
                 "list_apps = json.loads(subprocess.check_output(['bench', '--site', site, 'list-apps', '--format', 'json'], text=True)); "
                 "apps_txt = [x.strip() for x in Path('/home/frappe/frappe-bench/sites/apps.txt').read_text().splitlines() if x.strip()]; "
                 "f_sha = subprocess.check_output(['git', '-C', '/home/frappe/frappe-bench/apps/frappe', 'rev-parse', 'HEAD'], text=True).strip(); "
+                "f_pyproject_diff = subprocess.check_output(['git', '-C', '/home/frappe/frappe-bench/apps/frappe', 'diff', '--name-only', 'pyproject.toml'], text=True).strip(); "
+                "bench_pip_check_rc = subprocess.run(['/home/frappe/frappe-bench/env/bin/pip', 'check'], capture_output=True, text=True).returncode; "
+                "sys_pip_check_rc = subprocess.run(['pip3', 'check'], capture_output=True, text=True).returncode; "
                 "c_sha = subprocess.check_output(['git', '-C', '/home/frappe/frappe-bench/apps/crm', 'rev-parse', 'HEAD'], text=True).strip(); "
                 "crm_modified = [x.strip() for x in subprocess.check_output(['git', '-C', '/home/frappe/frappe-bench/apps/crm', 'diff', '--name-only'], text=True).splitlines() if x.strip()]; "
                 "frappe_navbar = Path('/home/frappe/frappe-bench/apps/frappe/frappe/templates/includes/navbar/navbar.html').read_text(); "
                 "frappe_doc = Path('/home/frappe/frappe-bench/apps/frappe/frappe/templates/doc.html').read_text(); "
+                "crm_www_html = Path('/home/frappe/frappe-bench/apps/crm/crm/www/crm.html').read_text(); "
                 "manifest = json.loads(Path('/home/frappe/frappe-bench/release-metadata/build-manifest.json').read_text()); "
+                "mdb_prov_path = Path('/home/frappe/frappe-bench/release-metadata/mariadb-stable-apt-provenance.json'); "
+                "mdb_prov = json.loads(mdb_prov_path.read_text()) if mdb_prov_path.is_file() else None; "
                 "assets_map = json.loads(Path('/home/frappe/frappe-bench/sites/assets/assets.json').read_text()); "
                 "modules_txt = [x.strip() for x in Path('/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/modules.txt').read_text().splitlines() if x.strip()]; "
                 "export_json = json.loads(Path('/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/crm_cskh/doctype/cskh_export_job/cskh_export_job.json').read_text()); "
+                "pyjwt_ver = im.version('PyJWT'); "
+                "pillow_ver = im.version('pillow'); "
+                "pem_key = '-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\\n-----END PUBLIC KEY-----'; "
+                "pem_guard = False\n"
+                "try:\n"
+                "    jwt.encode({'sub': 'probe'}, pem_key, algorithm='HS256')\n"
+                "except Exception as exc:\n"
+                "    pem_guard = exc.__class__.__name__ == 'InvalidKeyError'\n"
+                "img_buf = io.BytesIO(); "
+                "Image.new('RGB', (32, 32), (16, 64, 128)).save(img_buf, format='PNG'); "
+                "opt_bytes = optimize_image(img_buf.getvalue(), 'image/png', max_width=16, max_height=16); "
+                "pruned_present = []\n"
+                "for pkg in ('restic', 'libpq-dev', 'postgresql-client', 'gcc', 'g++', 'make', 'dpkg-dev', 'build-essential', 'pkg-config', 'libcairo2-dev', 'libpango1.0-dev', 'libmariadb-dev', 'wget', 'tk8.6-dev'):\n"
+                "    p = subprocess.run(['dpkg-query', '-W', '-f=${Status}\\n', pkg], capture_output=True, text=True)\n"
+                "    if p.returncode == 0 and 'install ok installed' in p.stdout:\n"
+                "        pruned_present.append(pkg)\n"
+                "mdb_dpkg = {}\n"
+                "for pkg in ('mariadb-common', 'libmariadb3', 'mariadb-client-core', 'mariadb-client', 'chromium-headless-shell', 'libxml2'):\n"
+                "    p = subprocess.run(['dpkg-query', '-W', '-f=${Status}|${Version}', pkg], capture_output=True, text=True)\n"
+                "    mdb_dpkg[pkg] = p.stdout.strip().split('|', 1)[1] if (p.returncode == 0 and 'install ok installed' in p.stdout) else None\n"
+                "mdb_cli_ver = subprocess.check_output(['mariadb', '--version'], text=True).strip(); "
+                "mdb_dump_ver = subprocess.check_output(['mariadb-dump', '--version'], text=True).strip(); "
+                "wkhtml_ver = subprocess.check_output(['wkhtmltopdf', '--version'], text=True).strip(); "
+                "fc_dejavu = 'DejaVu Sans' in subprocess.check_output(['fc-list', ':', 'family'], text=True); "
+                "import lxml.etree, pymysql, pypdf, weasyprint; "
+                "pdf_deps = {'wkhtmltopdf_cli': wkhtml_ver, 'weasyprint': weasyprint.__version__, 'pypdf': pypdf.__version__, 'pymysql': pymysql.__version__, 'lxml_libxml': '.'.join(str(x) for x in lxml.etree.LIBXML_VERSION), 'fontconfig_dejavu_sans': fc_dejavu}; "
                 "frappe.init(site=site, sites_path='/home/frappe/frappe-bench/sites'); "
                 "frappe.connect(); "
                 "cskh_rows = frappe.get_all('DocType', filters=[['name', 'like', 'CSKH %']], fields=['name', 'module'], order_by='name asc'); "
@@ -393,7 +503,7 @@ def main() -> int:
                 "export_table_exists = bool(frappe.db.sql(\"SHOW TABLES LIKE 'tabCSKH Export Job'\")); "
                 "dev_mode = bool(frappe.conf.get('developer_mode')); "
                 "frappe.destroy(); "
-                "print(json.dumps({'list_apps': list_apps.get(site), 'apps_txt': apps_txt, 'frappe_sha': f_sha, 'crm_sha': c_sha, 'crm_modified': crm_modified, 'frappe_jinja_patched': ('_(\\'Toggle navigation\\')|e' in frappe_navbar and '_(\\'Toggle navigation\\')|e' in frappe_doc), 'manifest': manifest, 'cskh_doctypes_rows': cskh_rows, 'module_defs_for_app': mod_defs, 'module_def_crm_cskh_titlecase_exists': bool(all_mod_crm_cskh), 'modules_txt': modules_txt, 'export_job_json_module': export_json.get('module'), 'export_job_table_exists': export_table_exists, 'developer_mode': dev_mode, 'desk_js': assets_map.get('desk.bundle.js'), 'desk_css': assets_map.get('desk.bundle.css'), 'web_js': assets_map.get('frappe-web.bundle.js')}))"
+                "print(json.dumps({'list_apps': list_apps.get(site), 'apps_txt': apps_txt, 'frappe_sha': f_sha, 'frappe_pyproject_diff': f_pyproject_diff, 'bench_pip_check_rc': bench_pip_check_rc, 'sys_pip_check_rc': sys_pip_check_rc, 'crm_sha': c_sha, 'crm_modified': crm_modified, 'frappe_jinja_patched': ('_(\\'Toggle navigation\\')|e' in frappe_navbar and '_(\\'Toggle navigation\\')|e' in frappe_doc), 'crm_branding_patched': ('hrpartner-branding-prepaint' in crm_www_html and '{{ favicon | e }}' in crm_www_html), 'manifest': manifest, 'mdb_prov': mdb_prov, 'pyjwt_ver': pyjwt_ver, 'pillow_ver': pillow_ver, 'pem_guard': pem_guard, 'pillow_optimize_ok': len(opt_bytes) > 0, 'pruned_present': pruned_present, 'mdb_dpkg': mdb_dpkg, 'mdb_cli_ver': mdb_cli_ver, 'mdb_dump_ver': mdb_dump_ver, 'pdf_deps': pdf_deps, 'cskh_doctypes_rows': cskh_rows, 'module_defs_for_app': mod_defs, 'module_def_crm_cskh_titlecase_exists': bool(all_mod_crm_cskh), 'modules_txt': modules_txt, 'export_job_json_module': export_json.get('module'), 'export_job_table_exists': export_table_exists, 'developer_mode': dev_mode, 'desk_js': assets_map.get('desk.bundle.js'), 'desk_css': assets_map.get('desk.bundle.css'), 'web_js': assets_map.get('frappe-web.bundle.js')}))"
             )
             probe_res = run_cmd(
                 [
@@ -431,6 +541,22 @@ def main() -> int:
                 runtime_info["frappe_sha"],
             )
             record(
+                "runtime.frappe_pyproject_unmodified",
+                runtime_info["frappe_pyproject_diff"] == "",
+                "",
+                runtime_info["frappe_pyproject_diff"],
+            )
+            record(
+                "runtime.pip_check_consistent",
+                runtime_info["bench_pip_check_rc"] == 0
+                and runtime_info["sys_pip_check_rc"] == 0,
+                {"bench_pip_check_rc": 0, "sys_pip_check_rc": 0},
+                {
+                    "bench_pip_check_rc": runtime_info["bench_pip_check_rc"],
+                    "sys_pip_check_rc": runtime_info["sys_pip_check_rc"],
+                },
+            )
+            record(
                 "runtime.crm_sha",
                 runtime_info["crm_sha"] == expected_crm_sha,
                 expected_crm_sha,
@@ -451,12 +577,133 @@ def main() -> int:
                 runtime_info["frappe_jinja_patched"],
             )
             record(
+                "runtime.crm_branding_prepaint_patched",
+                runtime_info["crm_branding_patched"] is True,
+                True,
+                runtime_info["crm_branding_patched"],
+            )
+            record(
                 "runtime.cskh_tree_sha",
                 runtime_info["manifest"]["apps"]["crm_cskh"]["crm_cskh_tree_sha"]
                 == expected_cskh_tree,
                 expected_cskh_tree,
                 runtime_info["manifest"]["apps"]["crm_cskh"]["crm_cskh_tree_sha"],
             )
+            record(
+                "runtime.security_patch.pyjwt_version",
+                runtime_info["pyjwt_ver"] == expected_pyjwt_ver,
+                expected_pyjwt_ver,
+                runtime_info["pyjwt_ver"],
+            )
+            record(
+                "runtime.security_patch.cve_2026_102268_pem_hmac_guard",
+                runtime_info["pem_guard"] is True,
+                True,
+                runtime_info["pem_guard"],
+            )
+            record(
+                "runtime.security_patch.pillow_version",
+                runtime_info["pillow_ver"] == expected_pillow_ver,
+                expected_pillow_ver,
+                runtime_info["pillow_ver"],
+            )
+            record(
+                "runtime.security_patch.pillow_optimize_image",
+                runtime_info["pillow_optimize_ok"] is True,
+                True,
+                runtime_info["pillow_optimize_ok"],
+            )
+            record(
+                "runtime.pruned_unused_apt_packages",
+                runtime_info["pruned_present"] == [],
+                [],
+                runtime_info["pruned_present"],
+            )
+            if expected_mariadb_deb_ver:
+                mdb_expected_map = {
+                    k: expected_mariadb_deb_ver
+                    for k in (
+                        "mariadb-common",
+                        "libmariadb3",
+                        "mariadb-client-core",
+                        "mariadb-client",
+                    )
+                }
+                mdb_actual_map = {
+                    k: runtime_info["mdb_dpkg"].get(k) for k in mdb_expected_map
+                }
+                record(
+                    "runtime.security_patch.mariadb_client_packages",
+                    mdb_actual_map == mdb_expected_map
+                    and "11.8.9-MariaDB" in runtime_info["mdb_cli_ver"]
+                    and "11.8.9-MariaDB" in runtime_info["mdb_dump_ver"],
+                    {
+                        "packages": mdb_expected_map,
+                        "cli_substring": "11.8.9-MariaDB",
+                    },
+                    {
+                        "packages": mdb_actual_map,
+                        "mariadb_cli": runtime_info["mdb_cli_ver"],
+                        "mariadb_dump": runtime_info["mdb_dump_ver"],
+                    },
+                )
+                mdb_prov_doc = runtime_info.get("mdb_prov") or {}
+                mdb_prov_pkgs = mdb_prov_doc.get("packages") or {}
+                exp_5_pkgs = {
+                    "mariadb-common",
+                    "libmariadb3",
+                    "mariadb-client-core",
+                    "mariadb-client",
+                    "libmariadb-dev",
+                }
+                record(
+                    "runtime.security_patch.mariadb_stable_apt_provenance",
+                    mdb_prov_doc.get("trixie_inrelease", {}).get("suite") == "stable"
+                    and mdb_prov_doc.get("trixie_inrelease", {}).get(
+                        "pgp_signed_header_verified"
+                    )
+                    is True
+                    and set(mdb_prov_pkgs) == exp_5_pkgs
+                    and all(
+                        mdb_prov_pkgs[k].get("version") == expected_mariadb_deb_ver
+                        and "trixie/main" in str(mdb_prov_pkgs[k].get("apt_policy", ""))
+                        and "proposed"
+                        not in str(mdb_prov_pkgs[k].get("apt_policy", "")).lower()
+                        for k in exp_5_pkgs
+                    ),
+                    {
+                        "suite": "stable",
+                        "packages": sorted(exp_5_pkgs),
+                        "version": expected_mariadb_deb_ver,
+                    },
+                    mdb_prov_doc,
+                )
+            if not expected_install_chromium:
+                record(
+                    "runtime.security_patch.chromium_and_libxml2_absent",
+                    runtime_info["mdb_dpkg"].get("chromium-headless-shell") is None
+                    and runtime_info["mdb_dpkg"].get("libxml2") is None,
+                    {"chromium-headless-shell": None, "libxml2": None},
+                    {
+                        "chromium-headless-shell": runtime_info["mdb_dpkg"].get(
+                            "chromium-headless-shell"
+                        ),
+                        "libxml2": runtime_info["mdb_dpkg"].get("libxml2"),
+                    },
+                )
+            record(
+                "runtime.pdf_and_db_dependencies",
+                "0.12.6.1" in runtime_info["pdf_deps"]["wkhtmltopdf_cli"]
+                and runtime_info["pdf_deps"]["weasyprint"] == "70.0"
+                and runtime_info["pdf_deps"]["fontconfig_dejavu_sans"] is True,
+                {
+                    "wkhtmltopdf_contains": "0.12.6.1",
+                    "weasyprint": "70.0",
+                    "fontconfig_dejavu_sans": True,
+                },
+                runtime_info["pdf_deps"],
+            )
+
             cskh_by_name = {
                 r["name"]: r["module"] for r in runtime_info["cskh_doctypes_rows"]
             }
@@ -478,7 +725,7 @@ def main() -> int:
                 runtime_info["developer_mode"],
             )
 
-            # 5. Probe HTTP routes and frontend static assets via `frontend` nginx -> `backend` gunicorn
+            # 5. Probe HTTP routes, authentication, Socket.IO & frontend static assets
             ping_info = wait_for_http_ping(args.port, args.site_name, timeout_sec=90)
             record(
                 "http.ping",
@@ -517,12 +764,19 @@ def main() -> int:
                     f"HTTP {st} ({len(body)} bytes)",
                 )
 
-            # CSKH static JS/CSS assets served directly by nginx `/assets/crm_cskh/cskh/*`
+            # CSKH static JS/CSS/SVG assets served directly by nginx `/assets/crm_cskh/cskh/*`
             for cskh_asset in (
                 "/assets/crm_cskh/cskh/cskh.js",
                 "/assets/crm_cskh/cskh/cskh.css",
+                "/assets/crm_cskh/cskh/crm-theme.css",
+                "/assets/crm_cskh/cskh/desk-theme.css",
+                "/assets/crm_cskh/cskh/web-theme.css",
+                "/assets/crm_cskh/cskh/crm-sidebar-bridge.js",
+                "/assets/crm_cskh/cskh/setup-wizard.js",
+                "/assets/crm_cskh/cskh/logo.svg",
                 "/assets/crm_cskh/cskh/p2-api.js",
                 "/assets/crm_cskh/cskh/p3-api.js",
+                "/assets/crm_cskh/cskh/p3-widgets.js",
                 "/assets/crm_cskh/cskh/quality-overview.js",
             ):
                 st, _, body = http_request(
@@ -538,15 +792,17 @@ def main() -> int:
                     f"HTTP {st} ({len(body)} bytes)",
                 )
 
-            # Guest login page (Vietnamese default language hook check) & Guest `/cskh/quality-overview` guard
+            # Guest login page (`web_include_css`) & Guest `/cskh/quality-overview` guard
             st_login, _, login_body = http_request(
                 anon_no_redirect, f"{base_url}/login", host_header=args.site_name
             )
             login_html = login_body.decode("utf-8", errors="replace")
             record(
                 "http.guest.login_200",
-                st_login == 200 and len(login_html) > 500,
-                "HTTP 200 & non-empty HTML",
+                st_login == 200
+                and len(login_html) > 500
+                and "/assets/crm_cskh/cskh/web-theme.css" in login_html,
+                "HTTP 200 & web-theme.css included",
                 f"HTTP {st_login} (len={len(login_html)})",
             )
 
@@ -562,9 +818,10 @@ def main() -> int:
                 st_guest_cskh,
             )
 
-            # Authenticated session checks for `/crm` SPA + its hashed Vite chunks + `/cskh` + `/cskh/quality-overview`
+            # Authenticated session checks
             jar = http.cookiejar.CookieJar()
             auth_opener = make_opener(follow_redirects=True, cookie_jar=jar)
+            auth_no_redirect = make_opener(follow_redirects=False, cookie_jar=jar)
             st_auth, _, _auth_raw = http_request(
                 auth_opener,
                 f"{base_url}/api/method/login",
@@ -574,14 +831,34 @@ def main() -> int:
             )
             record("http.auth.login", st_auth == 200, 200, st_auth)
 
+            st_who, _, who_raw = http_request(
+                auth_opener,
+                f"{base_url}/api/method/frappe.auth.get_logged_user",
+                host_header=args.site_name,
+            )
+            who_msg = (
+                json.loads(who_raw.decode("utf-8", errors="replace")).get("message")
+                if st_who == 200
+                else None
+            )
+            record(
+                "http.auth.logged_user_administrator",
+                st_who == 200 and who_msg == "Administrator",
+                "Administrator",
+                who_msg,
+            )
+
             st_crm, _, crm_raw = http_request(
                 auth_opener, f"{base_url}/crm", host_header=args.site_name
             )
             crm_html = crm_raw.decode("utf-8", errors="replace")
             record(
                 "http.auth.crm_page_200",
-                st_crm == 200 and 'id="app"' in crm_html,
-                "HTTP 200 with #app",
+                st_crm == 200
+                and 'id="app"' in crm_html
+                and 'data-cskh-crm-theme="1"' in crm_html
+                and 'data-cskh-sidebar-bridge="1"' in crm_html,
+                "HTTP 200 with #app, crm-theme.css & crm-sidebar-bridge.js",
                 f"HTTP {st_crm} (len={len(crm_html)})",
             )
 
@@ -611,11 +888,19 @@ def main() -> int:
                     f"HTTP {st_spa} ({len(spa_bytes)} bytes)",
                 )
 
+            csrf_token = ""
             for cskh_route in ("/cskh/dashboard", "/cskh/quality-overview"):
                 st_page, _, page_raw = http_request(
                     auth_opener, f"{base_url}{cskh_route}", host_header=args.site_name
                 )
                 page_html = page_raw.decode("utf-8", errors="replace")
+                if not csrf_token:
+                    m_csrf = re.search(
+                        r'(?:X-Frappe-CSRF-Token|csrf_token)["\']?\s*[:=]\s*["\']([0-9a-fA-F\-]{16,})["\']',
+                        page_html,
+                    )
+                    if m_csrf:
+                        csrf_token = m_csrf.group(1)
                 has_vi_label = any(
                     term in page_html
                     for term in (
@@ -627,12 +912,16 @@ def main() -> int:
                     )
                 )
                 slug_route = cskh_route.strip("/").replace("/", "_")
+                head_end_idx = page_html.find("</head>")
+                cskh_css_idx = page_html.find("/assets/crm_cskh/cskh/cskh.css")
                 record(
                     f"http.auth.route.{slug_route}",
                     st_page == 200
                     and 'id="cskh-root"' in page_html
+                    and 'class="cskh-sidebar"' in page_html
+                    and 0 <= cskh_css_idx < head_end_idx
                     and "Asia/Ho_Chi_Minh" in page_html,
-                    "HTTP 200 with #cskh-root & Asia/Ho_Chi_Minh",
+                    "HTTP 200 with #cskh-root, head cskh.css, cskh-sidebar & Asia/Ho_Chi_Minh",
                     f"HTTP {st_page} (len={len(page_html)})",
                 )
                 record(
@@ -642,7 +931,64 @@ def main() -> int:
                     has_vi_label,
                 )
 
-            # Check Vietnamese translation dictionary injected into /crm boot HTML (raw UTF-8 or \uXXXX JSON-escaped)
+            # Once `/cskh/*` has initialized `session.data.csrf_token` in Redis, verify missing,
+            # forged, and valid X-Frappe-CSRF-Token behavior on authenticated POST endpoints.
+            record(
+                "http.auth.csrf_token_extracted",
+                bool(csrf_token),
+                "non-empty CSRF token from /cskh/* HTML",
+                bool(csrf_token),
+            )
+            st_csrf_missing, _, csrf_missing_raw = http_request(
+                auth_no_redirect,
+                f"{base_url}/api/method/crm_cskh.api.health.ping",
+                host_header=args.site_name,
+                method="POST",
+                form_data={"probe": "missing_csrf"},
+            )
+            record(
+                "http.auth.csrf_missing_rejected",
+                st_csrf_missing in (400, 403),
+                "HTTP 400 or 403",
+                {
+                    "status": st_csrf_missing,
+                    "snippet": csrf_missing_raw.decode("utf-8", errors="replace")[:120],
+                },
+            )
+            st_csrf_forged, _, csrf_forged_raw = http_request(
+                auth_no_redirect,
+                f"{base_url}/api/method/crm_cskh.api.health.ping",
+                host_header=args.site_name,
+                method="POST",
+                form_data={"probe": "forged_csrf"},
+                extra_headers={"X-Frappe-CSRF-Token": "forged-invalid-csrf-token-0000"},
+            )
+            record(
+                "http.auth.csrf_forged_rejected",
+                st_csrf_forged in (400, 403),
+                "HTTP 400 or 403",
+                {
+                    "status": st_csrf_forged,
+                    "snippet": csrf_forged_raw.decode("utf-8", errors="replace")[:120],
+                },
+            )
+            st_csrf_valid, _, csrf_valid_raw = http_request(
+                auth_opener,
+                f"{base_url}/api/method/crm_cskh.api.health.ping",
+                host_header=args.site_name,
+                method="POST",
+                form_data={"probe": "valid_csrf"},
+                extra_headers={"X-Frappe-CSRF-Token": csrf_token},
+            )
+            csrf_valid_txt = csrf_valid_raw.decode("utf-8", errors="replace")
+            record(
+                "http.auth.csrf_valid_accepted",
+                st_csrf_valid == 200 and "crm_cskh" in csrf_valid_txt,
+                "HTTP 200 with crm_cskh health payload",
+                {"status": st_csrf_valid, "snippet": csrf_valid_txt[:120]},
+            )
+
+            # Check Vietnamese translation dictionary injected into /crm boot HTML
             crm_unescaped = re.sub(
                 r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), crm_html
             )
@@ -661,6 +1007,344 @@ def main() -> int:
                 crm_has_vi_boot,
                 "Vietnamese translated_messages in /crm boot",
                 crm_has_vi_boot,
+            )
+
+            # Verify HRPARTNER /crm prepaint favicon+logo on reload & /cskh warm-cache branding rotation
+            def _set_site_branding(splash_val: str, fav_val: str) -> int:
+                st_b, _, _ = http_request(
+                    auth_opener,
+                    f"{base_url}/api/method/frappe.client.set_value",
+                    host_header=args.site_name,
+                    method="POST",
+                    form_data={
+                        "doctype": "Website Settings",
+                        "name": "Website Settings",
+                        "fieldname": json.dumps(
+                            {"splash_image": splash_val, "favicon": fav_val}
+                        ),
+                    },
+                    extra_headers={"X-Frappe-CSRF-Token": csrf_token},
+                )
+                return st_b
+
+            logo_v1 = "/assets/crm_cskh/cskh/logo.svg?brand=hrpartner-v1"
+            fav_v1 = "/assets/crm_cskh/cskh/logo.svg?fav=hrpartner-v1"
+            logo_v2 = "/assets/crm_cskh/cskh/logo.svg?brand=hrpartner-v2"
+            fav_v2 = "/assets/crm_cskh/cskh/logo.svg?fav=hrpartner-v2"
+            st_set_v1 = _set_site_branding(logo_v1, fav_v1)
+            v1_crm_ok = True
+            v1_cskh_ok = True
+            for _ in range(6):
+                st_c1, _, raw_c1 = http_request(
+                    auth_opener,
+                    f"{base_url}/crm/leads",
+                    host_header=args.site_name,
+                )
+                txt_c1 = raw_c1.decode("utf-8", errors="replace")
+                if not (
+                    st_c1 == 200
+                    and f'href="{fav_v1}"' in txt_c1
+                    and 'id="hrpartner-branding-prepaint"' in txt_c1
+                    and logo_v1 in txt_c1
+                ):
+                    v1_crm_ok = False
+                st_k1, _, raw_k1 = http_request(
+                    auth_opener,
+                    f"{base_url}/cskh/dashboard",
+                    host_header=args.site_name,
+                )
+                txt_k1 = raw_k1.decode("utf-8", errors="replace")
+                if not (
+                    st_k1 == 200
+                    and f'src="{logo_v1}"' in txt_k1
+                    and 'class="cskh-sidebar-logo is-brand-logo"' in txt_k1
+                ):
+                    v1_cskh_ok = False
+
+            st_set_v2 = _set_site_branding(logo_v2, fav_v2)
+            v2_crm_ok = True
+            v2_cskh_ok = True
+            for _ in range(6):
+                st_c2, _, raw_c2 = http_request(
+                    auth_opener,
+                    f"{base_url}/crm/leads",
+                    host_header=args.site_name,
+                )
+                txt_c2 = raw_c2.decode("utf-8", errors="replace")
+                if not (
+                    st_c2 == 200
+                    and f'href="{fav_v2}"' in txt_c2
+                    and logo_v2 in txt_c2
+                    and logo_v1 not in txt_c2
+                    and fav_v1 not in txt_c2
+                ):
+                    v2_crm_ok = False
+                st_k2, _, raw_k2 = http_request(
+                    auth_opener,
+                    f"{base_url}/cskh/dashboard",
+                    host_header=args.site_name,
+                )
+                txt_k2 = raw_k2.decode("utf-8", errors="replace")
+                if not (
+                    st_k2 == 200
+                    and f'src="{logo_v2}"' in txt_k2
+                    and logo_v1 not in txt_k2
+                ):
+                    v2_cskh_ok = False
+
+            st_reset_b = _set_site_branding("", "")
+            reset_cskh_ok = True
+            for _ in range(4):
+                st_kr, _, raw_kr = http_request(
+                    auth_opener,
+                    f"{base_url}/cskh/dashboard",
+                    host_header=args.site_name,
+                )
+                txt_kr = raw_kr.decode("utf-8", errors="replace")
+                if not (
+                    st_kr == 200
+                    and logo_v2 not in txt_kr
+                    and "is-brand-logo" not in txt_kr
+                    and "/assets/crm_cskh/cskh/logo.svg?v=" in txt_kr
+                ):
+                    reset_cskh_ok = False
+
+            record(
+                "http.branding.prepaint_and_warm_cache_rotation",
+                st_set_v1 == 200
+                and st_set_v2 == 200
+                and st_reset_b == 200
+                and v1_crm_ok
+                and v1_cskh_ok
+                and v2_crm_ok
+                and v2_cskh_ok
+                and reset_cskh_ok,
+                {
+                    "v1_crm_prepaint": True,
+                    "v1_cskh_sidebar": True,
+                    "v2_warm_cache_rotated_zero_stale": True,
+                    "reset_restores_default_logo": True,
+                },
+                {
+                    "set_statuses": [st_set_v1, st_set_v2, st_reset_b],
+                    "v1_crm_prepaint": v1_crm_ok,
+                    "v1_cskh_sidebar": v1_cskh_ok,
+                    "v2_crm_rotated": v2_crm_ok,
+                    "v2_cskh_rotated": v2_cskh_ok,
+                    "reset_cskh_ok": reset_cskh_ok,
+                },
+            )
+
+            # Socket.IO Engine.IO v4 HTTP polling + RFC 6455 WebSocket upgrade via frontend nginx -> websocket:9000
+            st_sio_poll, _, sio_poll_raw = http_request(
+                auth_opener,
+                f"{base_url}/socket.io/?EIO=4&transport=polling",
+                host_header=args.site_name,
+            )
+            sio_poll_txt = sio_poll_raw.decode("utf-8", errors="replace")
+            record(
+                "http.socketio.polling_handshake",
+                st_sio_poll == 200 and '"sid"' in sio_poll_txt,
+                'HTTP 200 with Engine.IO "sid"',
+                f"HTTP {st_sio_poll}: {sio_poll_txt[:100]}",
+            )
+
+            cookie_hdr = "; ".join(f"{c.name}={c.value}" for c in jar)
+            ws_probe = probe_socketio_websocket_upgrade(
+                args.port, args.site_name, cookie_hdr
+            )
+            record(
+                "http.socketio.websocket_upgrade_101",
+                ws_probe["status_code"] == 101
+                and ws_probe["upgrade"] == "websocket"
+                and ws_probe["accept_valid"] is True,
+                {
+                    "status_code": 101,
+                    "upgrade": "websocket",
+                    "accept_valid": True,
+                },
+                ws_probe,
+            )
+
+            # Verify logout revokes session access to protected `/cskh/quality-overview`
+            logout_headers = {"X-Frappe-CSRF-Token": csrf_token} if csrf_token else None
+            st_logout, _, _ = http_request(
+                auth_opener,
+                f"{base_url}/api/method/logout",
+                host_header=args.site_name,
+                method="POST" if csrf_token else "GET",
+                extra_headers=logout_headers,
+            )
+            st_after_logout, _, _ = http_request(
+                auth_no_redirect,
+                f"{base_url}/cskh/quality-overview",
+                host_header=args.site_name,
+            )
+            record(
+                "http.auth.logout_revokes_cskh_session",
+                st_logout == 200 and st_after_logout in (302, 303, 401, 403),
+                {"logout": 200, "post_logout_cskh": "302/303/401/403"},
+                {"logout": st_logout, "post_logout_cskh": st_after_logout},
+            )
+
+            # 5b. MariaDB 11.8.9 backup -> mutate/delete -> restore -> migrate roundtrip
+            probe_vi_org = (
+                "Đối tác Nhân sự Việt Nam — Kiểm thử Sao lưu MariaDB 11.8.9 ₫"
+            )
+            seed_backup_py = "\n".join(
+                [
+                    "import glob, gzip, json, os, shutil, subprocess, frappe",
+                    f"site = {args.site_name!r}",
+                    f"org_val = {probe_vi_org!r}",
+                    "os.chdir('/home/frappe/frappe-bench/sites')",
+                    "frappe.init(site=site, sites_path='.')",
+                    "frappe.connect()",
+                    "frappe.set_user('Administrator')",
+                    "os.makedirs(frappe.get_site_path('public', 'files'), exist_ok=True)",
+                    "os.makedirs(frappe.get_site_path('private', 'files'), exist_ok=True)",
+                    "lead = frappe.get_doc({'doctype': 'CRM Lead', 'first_name': 'Nguyễn Văn', 'last_name': 'Khôi', 'organization': org_val, 'lead_owner': 'Administrator'}).insert(ignore_permissions=True)",
+                    "lead_name = lead.name",
+                    "frappe.db.commit()",
+                    "frappe.destroy()",
+                    "bkp_proc = subprocess.run(['bench', '--site', site, 'backup', '--with-files'], cwd='/home/frappe/frappe-bench', capture_output=True, text=True)",
+                    "assert bkp_proc.returncode == 0, f'bench backup failed: {bkp_proc.stderr}\\n{bkp_proc.stdout}'",
+                    "bdir = f'/home/frappe/frappe-bench/sites/{site}/private/backups'",
+                    "sql_files = sorted(glob.glob(f'{bdir}/*-database.sql.gz'))",
+                    "priv_files = sorted(glob.glob(f'{bdir}/*-private-files.tar'))",
+                    "pub_files = sorted([p for p in glob.glob(f'{bdir}/*-files.tar') if not p.endswith('-private-files.tar')])",
+                    "assert sql_files and priv_files and pub_files, f'Missing backup artifacts in {bdir}'",
+                    "latest_sql, latest_priv, latest_pub = sql_files[-1], priv_files[-1], pub_files[-1]",
+                    "shutil.copy2(latest_sql, '/tmp/cskh-verify-db.sql.gz')",
+                    "shutil.copy2(latest_priv, '/tmp/cskh-verify-priv.tar')",
+                    "shutil.copy2(latest_pub, '/tmp/cskh-verify-pub.tar')",
+                    "with gzip.open(latest_sql, 'rb') as gz:",
+                    "    sample_hdr = gz.read(256).decode('utf-8', errors='replace')",
+                    "sql_size = os.path.getsize(latest_sql)",
+                    "os.chdir('/home/frappe/frappe-bench/sites')",
+                    "frappe.init(site=site, sites_path='.')",
+                    "frappe.connect()",
+                    "frappe.set_user('Administrator')",
+                    "frappe.delete_doc('CRM Lead', lead_name, force=True, ignore_permissions=True)",
+                    "frappe.db.commit()",
+                    "exists_after_delete = bool(frappe.db.exists('CRM Lead', lead_name))",
+                    "frappe.destroy()",
+                    "print(json.dumps({'lead_name': lead_name, 'backup_sql_bytes': sql_size, 'dump_header_sample': sample_hdr[:120], 'exists_after_delete': exists_after_delete}))",
+                ]
+            )
+            seed_bkp_res = run_cmd(
+                [
+                    *compose_base,
+                    "exec",
+                    "-T",
+                    "backend",
+                    "/home/frappe/frappe-bench/env/bin/python",
+                    "-c",
+                    seed_backup_py,
+                ],
+                env=compose_env,
+                timeout=180,
+            )
+            bkp_stage = json.loads(seed_bkp_res.stdout.strip().splitlines()[-1])
+
+            run_cmd(
+                [*compose_base, "stop", "queue-short", "scheduler"],
+                env=compose_env,
+                timeout=60,
+            )
+            exec_backend(
+                "set -euo pipefail; cd /home/frappe/frappe-bench; "
+                'bench --site "$VERIFY_SITE" --force restore /tmp/cskh-verify-db.sql.gz '
+                "--with-private-files /tmp/cskh-verify-priv.tar "
+                "--with-public-files /tmp/cskh-verify-pub.tar "
+                '--db-root-password "$VERIFY_DB_ROOT_PW" '
+                '--admin-password "$VERIFY_ADMIN_PW"; '
+                "rm -f /tmp/cskh-verify-db.sql.gz /tmp/cskh-verify-priv.tar /tmp/cskh-verify-pub.tar; "
+                'bench --site "$VERIFY_SITE" migrate; '
+                'bench --site "$VERIFY_SITE" clear-cache',
+                secret_env,
+            )
+            run_cmd(
+                [*compose_base, "up", "-d", "queue-short", "scheduler"],
+                env=compose_env,
+                timeout=60,
+            )
+            run_cmd(
+                [
+                    *compose_base,
+                    "restart",
+                    "backend",
+                    "websocket",
+                    "queue-short",
+                    "scheduler",
+                ],
+                env=compose_env,
+                timeout=120,
+            )
+            wait_for_http_ping(args.port, args.site_name, timeout_sec=90)
+
+            verify_restore_py = "\n".join(
+                [
+                    "import json, os, subprocess, frappe",
+                    f"site = {args.site_name!r}",
+                    f"lead_name = {bkp_stage['lead_name']!r}",
+                    "os.chdir('/home/frappe/frappe-bench/sites')",
+                    "frappe.init(site=site, sites_path='.')",
+                    "frappe.connect()",
+                    "frappe.set_user('Administrator')",
+                    "restored = frappe.db.get_value('CRM Lead', lead_name, ['first_name', 'last_name', 'organization'], as_dict=True)",
+                    "cskh_cnt = frappe.db.count('DocType', filters=[['name', 'like', 'CSKH %']])",
+                    "if restored:",
+                    "    frappe.delete_doc('CRM Lead', lead_name, force=True, ignore_permissions=True)",
+                    "    frappe.db.commit()",
+                    "frappe.destroy()",
+                    "apps_after = json.loads(subprocess.check_output(['bench', '--site', site, 'list-apps', '--format', 'json'], cwd='/home/frappe/frappe-bench', text=True)).get(site)",
+                    "print(json.dumps({'restored_lead': restored, 'cskh_doctype_count_after_restore_migrate': cskh_cnt, 'list_apps_after_restore_migrate': apps_after}))",
+                ]
+            )
+            ver_rest_res = run_cmd(
+                [
+                    *compose_base,
+                    "exec",
+                    "-T",
+                    "backend",
+                    "/home/frappe/frappe-bench/env/bin/python",
+                    "-c",
+                    verify_restore_py,
+                ],
+                env=compose_env,
+                timeout=90,
+            )
+            rest_stage = json.loads(ver_rest_res.stdout.strip().splitlines()[-1])
+            restored_lead = rest_stage.get("restored_lead") or {}
+            backup_restore_audit = {
+                "backup_sql_bytes": bkp_stage["backup_sql_bytes"],
+                "dump_header_sample": bkp_stage["dump_header_sample"],
+                "deleted_before_restore": bkp_stage["exists_after_delete"] is False,
+                "restored_lead": restored_lead,
+                "cskh_doctype_count_after_restore_migrate": rest_stage[
+                    "cskh_doctype_count_after_restore_migrate"
+                ],
+                "list_apps_after_restore_migrate": rest_stage[
+                    "list_apps_after_restore_migrate"
+                ],
+            }
+            record(
+                "runtime.backup_restore_and_migrate_roundtrip",
+                int(bkp_stage["backup_sql_bytes"]) > 1000
+                and bkp_stage["exists_after_delete"] is False
+                and restored_lead.get("first_name") == "Nguyễn Văn"
+                and restored_lead.get("last_name") == "Khôi"
+                and restored_lead.get("organization") == probe_vi_org
+                and rest_stage["list_apps_after_restore_migrate"] == expected_load_order
+                and int(rest_stage["cskh_doctype_count_after_restore_migrate"]) >= 22,
+                {
+                    "deleted_before_restore": True,
+                    "restored_first_name": "Nguyễn Văn",
+                    "restored_last_name": "Khôi",
+                    "restored_organization": probe_vi_org,
+                    "list_apps": expected_load_order,
+                },
+                backup_restore_audit,
             )
 
             # 6. Check background worker/scheduler/websocket container health
@@ -729,9 +1413,38 @@ def main() -> int:
                 "completed_at_utc": datetime.now(timezone.utc).isoformat(),
                 "app_image_tested": args.app_image,
                 "image_id": img_info.get("Id"),
+                "identifier_taxonomy": {
+                    "app_image_tested_class": (
+                        "oci_distribution_manifest_sha256"
+                        if "@sha256:" in args.app_image
+                        else "local_image_ref"
+                    ),
+                    "image_id_class": "docker_pulled_image_id_sha256",
+                    "note": (
+                        "app_image_tested (@sha256 manifest digest) and image_id "
+                        "(local OCI config or containerd manifest ID) represent different "
+                        "OCI descriptor layers of the same candidate; never cross-compare "
+                        "mismatched identifier classes or compare against unrelated live images."
+                    ),
+                },
                 "site_name": args.site_name,
                 "http_loopback_port": args.port,
                 "list_apps": runtime_info["list_apps"],
+                "security_patches_verified": {
+                    "pyjwt_version": runtime_info["pyjwt_ver"],
+                    "cve_2026_102268_pem_hmac_guard": runtime_info["pem_guard"],
+                    "pillow_version": runtime_info["pillow_ver"],
+                    "pillow_optimize_image_ok": runtime_info["pillow_optimize_ok"],
+                    "pruned_unused_apt_packages_present": runtime_info[
+                        "pruned_present"
+                    ],
+                    "mariadb_and_xml2_dpkg": runtime_info["mdb_dpkg"],
+                    "mariadb_stable_apt_provenance": runtime_info.get("mdb_prov"),
+                    "mariadb_cli_version": runtime_info["mdb_cli_ver"],
+                    "mariadb_dump_version": runtime_info["mdb_dump_ver"],
+                    "pdf_and_db_dependencies": runtime_info["pdf_deps"],
+                    "backup_restore_and_migrate_roundtrip": backup_restore_audit,
+                },
                 "upstream_revisions": {
                     "frappe": runtime_info["frappe_sha"],
                     "crm": runtime_info["crm_sha"],

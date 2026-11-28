@@ -1084,17 +1084,17 @@ window.cskhP3Widgets = (function () {
 			const barW = isNa ? 0 : Math.round((numericVal / maxVal) * barMaxW)
 
 			svg.appendChild(
-				svgEl('text', { x: 4, y: y + 15, fill: '#1f272e', 'font-size': '12' }, [
+				svgEl('text', { x: 4, y: y + 15, fill: '#334155', 'font-size': '12', 'font-weight': '500' }, [
 					String(it.label || '—').slice(0, 26),
 				])
 			)
 			svg.appendChild(
 				svgEl('rect', {
 					x: labelW,
-					y: y + 3,
+					y: y + 4,
 					width: barMaxW,
-					height: 16,
-					rx: 4,
+					height: 14,
+					rx: 7,
 					fill: '#f1f5f9',
 				})
 			)
@@ -1102,11 +1102,11 @@ window.cskhP3Widgets = (function () {
 				svg.appendChild(
 					svgEl('rect', {
 						x: labelW,
-						y: y + 3,
+						y: y + 4,
 						width: barW,
-						height: 16,
-						rx: 4,
-						fill: it.color || '#2563eb',
+						height: 14,
+						rx: 7,
+						fill: it.color || '#4f46e5',
 					})
 				)
 			}
@@ -1116,7 +1116,7 @@ window.cskhP3Widgets = (function () {
 					{
 						x: labelW + barMaxW + 10,
 						y: y + 15,
-						fill: isNa ? '#7c7c7c' : '#1f272e',
+						fill: isNa ? '#94a3b8' : '#0f172a',
 						'font-size': '12',
 						'font-weight': '600',
 					},

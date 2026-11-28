@@ -111,12 +111,34 @@ def _record_p1_error(code, details=None):
 
 def is_transient_tx_abort(exc: BaseException) -> bool:
 	"""Return True for MariaDB InnoDB deadlock (`1213`) or snapshot-isolation conflict (`1020`)."""
+	cls_name = type(exc).__name__
 	text = str(exc)
 	return (
-		"Deadlock" in type(exc).__name__
+		"Deadlock" in cls_name
 		or "1213" in text
 		or "1020" in text
 		or "Record has changed since last read" in text
+	)
+
+
+def is_savepoint_missing_error(exc: BaseException) -> bool:
+	"""Return True for MariaDB `1305 SAVEPOINT ... does not exist` after an implicit tx abort."""
+	text = str(exc)
+	return "1305" in text and "SAVEPOINT" in text.upper()
+
+
+def is_dirty_scope_retryable_error(exc: BaseException) -> bool:
+	"""Return True for transient DB concurrency errors during `CSKH Dirty Scope` persistence."""
+	cls_name = type(exc).__name__
+	text = str(exc)
+	return (
+		is_transient_tx_abort(exc)
+		or is_savepoint_missing_error(exc)
+		or "DuplicateEntry" in cls_name
+		or "QueryTimeout" in cls_name
+		or "1062" in text
+		or "1205" in text
+		or "Lock wait timeout" in text
 	)
 
 

@@ -226,6 +226,18 @@ def verify_promotion_chain(
         "git_sha": manifest["git_sha"],
         "canonical_registry_digest": canonical_digest,
         "canonical_image_id": canonical_image_id,
+        "identifier_taxonomy": {
+            "canonical_registry_digest_class": "oci_distribution_manifest_sha256",
+            "canonical_image_id_class": "oci_image_config_sha256",
+            "drift_evaluation_rule": (
+                "Digest drift is evaluated exclusively within identical identifier classes "
+                "(registry_manifest_digest == registry_manifest_digest and image_id in "
+                "allowed_pulled_image_ids across Build -> Verify -> Staging). Cross-comparing "
+                "a local image ID (e.g. db925419...) against a registry manifest digest "
+                "(e.g. 36613468...) or against an unrelated live running image (e.g. acb95057...) "
+                "is invalid."
+            ),
+        },
         "manifest_sha256": sha256_bytes(raw_manifest),
         "signature_verified": True,
         "public_key_fingerprint_sha256": normalize_public_key_fingerprint(

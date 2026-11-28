@@ -179,6 +179,9 @@ def guard_crm_holiday_list_mutation(doc, method=None) -> None:
 			_("Chỉ CSKH CRM Admin hoặc System Manager được phép thay đổi danh sách ngày nghỉ lễ."),
 			frappe.PermissionError,
 		)
+	from crm_cskh.services import runtime_cache
+
+	runtime_cache.on_calendar_doc_change(doc, method)
 
 
 class TeamMembershipHistory(Document):
@@ -414,6 +417,30 @@ def ensure_p3_indexes(only_doctype: str | None = None) -> None:
 			False,
 		),
 		(
+			"CSKH Assignment History",
+			("action", "ownership_start", "ownership_end"),
+			"idx_cskh_ah_act_interval",
+			False,
+		),
+		(
+			"CSKH Assignment History",
+			("ownership_start", "name", "action"),
+			"idx_cskh_ah_start_name",
+			False,
+		),
+		(
+			"CSKH Assignment History",
+			("work_item", "action", "ownership_start"),
+			"idx_cskh_ah_wi_act_start",
+			False,
+		),
+		(
+			"CSKH Work Item",
+			("campaign", "name", "lead"),
+			"idx_cskh_wi_camp_name",
+			False,
+		),
+		(
 			"CSKH SLA Obligation",
 			("idempotency_key",),
 			"uniq_cskh_sla_idem_key",
@@ -468,6 +495,24 @@ def ensure_p3_indexes(only_doctype: str | None = None) -> None:
 			False,
 		),
 		(
+			"CSKH SLA Obligation",
+			("obligation_type", "effective_due_at", "name", "status"),
+			"idx_cskh_sla_type_due_name",
+			False,
+		),
+		(
+			"CSKH SLA Obligation",
+			("effective_due_at", "name", "obligation_type", "status"),
+			"idx_cskh_sla_due_name",
+			False,
+		),
+		(
+			"CSKH SLA Obligation",
+			("interval_event", "obligation_type", "status"),
+			"idx_cskh_sla_ivevt_type",
+			False,
+		),
+		(
 			"CSKH KPI Snapshot",
 			(
 				"is_latest_published",
@@ -483,6 +528,30 @@ def ensure_p3_indexes(only_doctype: str | None = None) -> None:
 			"CSKH Contact Attempt",
 			("occurred_at", "recorded_at"),
 			"idx_cskh_attempt_occ_rec",
+			False,
+		),
+		(
+			"CSKH Contact Attempt",
+			(
+				"occurred_at",
+				"name",
+				"recorded_at",
+				"contact_attempt_snapshot",
+				"connected_snapshot",
+			),
+			"idx_cskh_attempt_occ_name",
+			False,
+		),
+		(
+			"CSKH Contact Attempt",
+			("ownership_event", "occurred_at"),
+			"idx_cskh_attempt_ownevt_occ",
+			False,
+		),
+		(
+			"CSKH Contact Attempt",
+			("ownership_event", "occurred_at", "recorded_at", "contact_attempt_snapshot"),
+			"idx_cskh_attempt_ownevt_cover",
 			False,
 		),
 		(
@@ -533,12 +602,123 @@ def ensure_p3_indexes(only_doctype: str | None = None) -> None:
 			"idx_cskh_exp_status_exp",
 			False,
 		),
+		# Additive covering indexes for F-G18-AB-CONFIGB-AND-DIRTY-COUNT-01 (`N -> N-1` rollback safe;
+		# every composite key <= 2,833 bytes in utf8mb4, comfortably below MariaDB's 3,072-byte limit):
+		(
+			"CSKH Assignment History",
+			(
+				"ownership_start",
+				"name",
+				"action",
+				"team_at_assignment",
+				"attribution_status",
+				"work_item",
+				"ownership_end",
+			),
+			"idx_cskh_ah_start_cover",
+			False,
+		),
+		(
+			"CSKH Assignment History",
+			(
+				"team_at_assignment",
+				"attribution_status",
+				"ownership_start",
+				"name",
+				"action",
+				"work_item",
+				"ownership_end",
+			),
+			"idx_cskh_ah_team_start_cover",
+			False,
+		),
+		(
+			"CSKH Assignment History",
+			(
+				"to_user",
+				"ownership_start",
+				"name",
+				"action",
+				"team_at_assignment",
+				"attribution_status",
+				"ownership_end",
+			),
+			"idx_cskh_ah_user_start_cover",
+			False,
+		),
+		(
+			"CSKH Work Item",
+			("name", "campaign", "lead"),
+			"idx_cskh_wi_name_camp",
+			False,
+		),
+		(
+			"CSKH Contact Attempt",
+			(
+				"ownership_event",
+				"contact_attempt_snapshot",
+				"occurred_at",
+				"recorded_at",
+				"connected_snapshot",
+				"invalid_phone_snapshot",
+				"outcome_code",
+			),
+			"idx_cskh_attempt_iv_flags_cover",
+			False,
+		),
+		(
+			"CSKH Contact Attempt",
+			(
+				"invalid_phone_snapshot",
+				"contact_attempt_snapshot",
+				"occurred_at",
+				"recorded_at",
+				"ownership_event",
+			),
+			"idx_cskh_attempt_inv_occ",
+			False,
+		),
+		(
+			"CSKH Contact Attempt",
+			(
+				"outcome_code",
+				"contact_attempt_snapshot",
+				"occurred_at",
+				"recorded_at",
+				"ownership_event",
+			),
+			"idx_cskh_attempt_ocode_occ",
+			False,
+		),
+		(
+			"CSKH SLA Obligation",
+			(
+				"interval_event",
+				"obligation_type",
+				"status",
+				"started_at",
+				"effective_due_at",
+				"fulfilled_at",
+				"closed_at",
+				"waived_at",
+				"is_paused",
+				"paused_at",
+			),
+			"idx_cskh_sla_ivevt_cover",
+			False,
+		),
 	]
 	for dt, cols, idx_name, is_uniq in specs:
 		if only_doctype and dt != only_doctype:
 			continue
 		if all(frappe.db.has_column(dt, c) for c in cols):
 			_ensure_index(dt, cols, idx_name, unique=is_uniq)
+	try:
+		from crm_cskh.services.runtime_cache import clear_schema_cache
+
+		clear_schema_cache()
+	except Exception:
+		pass
 
 
 def ensure_p3_seeds() -> None:
@@ -711,3 +891,9 @@ def ensure_p3_seeds() -> None:
 				  and coalesce(is_invalid_phone, 0) = 0
 				"""
 			)
+
+	# 6. Normalize `CSKH KPI Snapshot.campaign_filter` NULLs to '' so `idx_cskh_kpisnap_lookup` matches by equality
+	if frappe.db.table_exists("CSKH KPI Snapshot") and frappe.db.has_column(
+		"CSKH KPI Snapshot", "campaign_filter"
+	):
+		frappe.db.sql("update `tabCSKH KPI Snapshot` set campaign_filter = '' where campaign_filter is null")

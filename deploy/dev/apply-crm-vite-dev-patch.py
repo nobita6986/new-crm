@@ -829,6 +829,10 @@ export default function translationPlugin(app) {"""
     shim_line = (
         "    <script>var __ = window.__ = window.__ || ((message) => message)</script>"
     )
+    sidebar_bridge_line = (
+        '    <script defer src="/assets/crm_cskh/cskh/crm-sidebar-bridge.js" '
+        'data-cskh-sidebar-bridge="1" data-cskh-href="/cskh" data-cskh-label="CSKH"></script>'
+    )
     current_index = index_html.read_text(encoding="utf-8")
     index_lines = [
         line
@@ -836,12 +840,19 @@ export default function translationPlugin(app) {"""
         if not (
             "window.__ = window.__ || ((message) => message)" in line
             or "var __ = window.__ = window.__ || ((message) => message)" in line
+            or "crm-sidebar-bridge.js" in line
         )
     ]
     head_index = index_lines.index("  <head>") if "  <head>" in index_lines else -1
     if head_index < 0:
         raise RuntimeError("Pinned CRM Vite index.html head marker is missing")
     index_lines.insert(head_index + 1, shim_line)
+    body_close_index = (
+        index_lines.index("  </body>") if "  </body>" in index_lines else -1
+    )
+    if body_close_index < 0:
+        raise RuntimeError("Pinned CRM Vite index.html body close marker is missing")
+    index_lines.insert(body_close_index, sidebar_bridge_line)
     normalized_index = "\n".join(index_lines) + "\n"
     changed_index = normalized_index != current_index
     if changed_index:

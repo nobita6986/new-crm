@@ -35,6 +35,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from html.parser import HTMLParser
 
 COMPOSE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 REPO_ROOT = COMPOSE_ROOT.parent.parent
@@ -142,6 +143,181 @@ class SmokeLogger:
         for raw_val, placeholder in self._secrets.items():
             if raw_val in text:
                 raise RuntimeError(f"Secret leak detected prior to output ({placeholder})")
+
+    def sanitize_url(self, value: str) -> str:
+        """Normalize URLs for diagnostics without userinfo, query/fragment secrets, or payloads."""
+        import urllib.parse as _urlparse
+
+        raw = self.scrub(str(value or "")).strip()
+        if not raw:
+            return ""
+        if raw[:5].lower() == "data:":
+            payload = raw[5:]
+            digest = hashlib.sha256(
+                payload.encode("utf-8", errors="replace")
+            ).hexdigest()[:12]
+            header = payload.partition(",")[0] if "," in payload[:128] else ""
+            media = header.split(";", 1)[0].strip().lower()
+            if re.fullmatch(
+                r"[a-z0-9][a-z0-9.+-]{0,31}/[a-z0-9][a-z0-9.+-]{0,63}", media
+            ):
+                return f"data:{media};<REDACTED_DATA:sha256={digest}>"
+            return f"data:<REDACTED_DATA:sha256={digest}>"
+
+        scheme_match = re.match(r"^([a-zA-Z][a-zA-Z0-9+.-]{0,31}):(.*)$", raw)
+        if scheme_match:
+            cand_scheme = scheme_match.group(1).lower()
+            if cand_scheme not in ("http", "https"):
+                if cand_scheme in {
+                    "about",
+                    "blob",
+                    "file",
+                    "ftp",
+                    "javascript",
+                    "vbscript",
+                    "ws",
+                    "wss",
+                }:
+                    digest = hashlib.sha256(
+                        scheme_match.group(2).encode("utf-8", errors="replace")
+                    ).hexdigest()[:12]
+                    return f"{cand_scheme}:<REDACTED_PAYLOAD:sha256={digest}>"
+                return "<UNSUPPORTED_SCHEME_URL>"
+
+        if re.search(r"[\x00-\x20\x7f\\]", raw):
+            return "<MALFORMED_URL>"
+
+        try:
+            parts = _urlparse.urlsplit(raw)
+            scheme = parts.scheme.lower()
+            if scheme and scheme not in ("http", "https"):
+                return "<UNSUPPORTED_SCHEME_URL>"
+            if scheme and not parts.netloc:
+                return "<MALFORMED_URL>"
+            host = parts.hostname or ""
+            port = parts.port
+            if parts.netloc and not host:
+                return "<MALFORMED_URL>"
+            authority = ""
+            if parts.netloc:
+                if ":" in host:
+                    if not re.fullmatch(r"[0-9a-fA-F:.]{2,45}", host):
+                        return "<MALFORMED_URL>"
+                    safe_host = f"[{host.lower()}]"
+                else:
+                    if (
+                        not re.fullmatch(r"[a-zA-Z0-9.-]{1,253}", host)
+                        or ".." in host
+                        or host.startswith("-")
+                        or host.endswith("-")
+                    ):
+                        return "<MALFORMED_URL>"
+                    safe_host = host.lower()
+                authority = f"{safe_host}:{port}" if port is not None else safe_host
+
+            safe_segments: list[str] = []
+            for seg in parts.path.split("/"):
+                if not seg:
+                    safe_segments.append("")
+                    continue
+                base_seg, sep, _ = seg.partition(";")
+                suffix = ";<REDACTED_PARAM>" if sep else ""
+                decoded_seg = _urlparse.unquote(base_seg)
+                if "<REDACTED_" in base_seg:
+                    cleaned_seg = base_seg
+                elif (
+                    any(ch in decoded_seg for ch in ("@", "=", ":", "/", "\\"))
+                    or bool(re.search(r"[\x00-\x1f\x7f]", decoded_seg))
+                    or bool(re.match(r"^eyJ[A-Za-z0-9_-]{8,}", decoded_seg))
+                    or len(decoded_seg) > 64
+                    or (
+                        len(decoded_seg) >= 32
+                        and bool(re.fullmatch(r"[A-Za-z0-9_-]+", decoded_seg))
+                    )
+                ):
+                    cleaned_seg = "<REDACTED_SEGMENT>"
+                else:
+                    cleaned_seg = _urlparse.quote(base_seg, safe=".-_~%")
+                safe_segments.append(cleaned_seg + suffix)
+
+            safe_path = "/".join(safe_segments)
+            if not authority and safe_path.startswith("//"):
+                safe_path = "/" + safe_path.lstrip("/")
+
+            safe_query = ""
+            if parts.query:
+                q_digest = hashlib.sha256(
+                    parts.query.encode("utf-8", errors="replace")
+                ).hexdigest()[:12]
+                safe_query = f"<REDACTED_QUERY:sha256={q_digest}>"
+
+            safe_fragment = ""
+            if parts.fragment:
+                f_digest = hashlib.sha256(
+                    parts.fragment.encode("utf-8", errors="replace")
+                ).hexdigest()[:12]
+                safe_fragment = f"<REDACTED_FRAGMENT:sha256={f_digest}>"
+
+            safe_url = _urlparse.urlunsplit(
+                (scheme, authority, safe_path, safe_query, safe_fragment)
+            )
+            return safe_url if len(safe_url) <= 256 else safe_url[:240] + "<TRUNCATED>"
+        except (TypeError, ValueError):
+            return "<MALFORMED_URL>"
+
+    def sanitize_error(self, text: str) -> str:
+        """Scrub diagnostic error strings and normalize embedded URLs, tokens, and data URIs."""
+        out = self.scrub(str(text or ""))
+        out = re.sub(
+            r'"(data:(?:\\.|[^"\\])*)"',
+            lambda m: '"' + self.sanitize_url(m.group(1)) + '"',
+            out,
+            flags=re.IGNORECASE,
+        )
+        out = re.sub(
+            r"'(data:(?:\\.|[^'\\])*)'",
+            lambda m: "'" + self.sanitize_url(m.group(1)) + "'",
+            out,
+            flags=re.IGNORECASE,
+        )
+        out = re.sub(
+            r"(?i)\bdata:(?:[a-z0-9.+-]{1,32}/[a-z0-9.+-]{1,64})?(?:;[a-z0-9.=+-]+)*,[^\r\n]*",
+            lambda m: self.sanitize_url(m.group(0)),
+            out,
+        )
+
+        def _replace_url(match: re.Match[str]) -> str:
+            raw_url = match.group(0)
+            trimmed = raw_url.rstrip(".,;)]}")
+            tail = raw_url[len(trimmed) :]
+            return self.sanitize_url(trimmed) + tail
+
+        out = re.sub(
+            r"(?i)(?:\b[a-z][a-z0-9+.-]{0,31}://|(?<![:\w])//)[^\s\"'<>]+",
+            _replace_url,
+            out,
+        )
+        out = re.sub(
+            r"\b[^\s/@:]+:[^\s/@]+@([A-Za-z0-9.-]+(?::\d+)?)",
+            r"<REDACTED_USERINFO>@\1",
+            out,
+        )
+        out = re.sub(
+            r"(?i)\b(x-amz-credential|x-amz-signature|x-amz-security-token|"
+            r"x-goog-credential|x-goog-signature|access_token|refresh_token|"
+            r"id_token|api_key|apikey|client_secret|secret|password|passwd|"
+            r"pwd|token|sig|signature|authorization|cookie|set-cookie)"
+            r"\s*([=:])\s*(?!<REDACTED_)([^\s&,;\"'<>]+)",
+            r"\1\2<REDACTED_TOKEN>",
+            out,
+        )
+        out = re.sub(
+            r"(?i)\b(Bearer|Basic)\s+(?!<REDACTED_)[A-Za-z0-9._~+/=-]+",
+            r"\1 <REDACTED_TOKEN>",
+            out,
+        )
+        out = re.sub(r"[\x00-\x1f\x7f]+", " ", out).strip()
+        return out if len(out) <= 320 else out[:304] + "<TRUNCATED>"
 
     def render(self) -> str:
         text = "\n".join(self._entries) + "\n"
@@ -534,6 +710,33 @@ def http_call(
         opener, url, site_host, method=method, data=data, headers=headers
     )
     return status, resp_headers, body
+
+
+def http_call_bytes(
+    opener: urllib.request.OpenerDirector,
+    url: str,
+    site_host: str,
+    method: str = "GET",
+    data: bytes | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: int = 60,
+) -> tuple[int, dict[str, str], bytes]:
+    """Performs HTTP request returning raw response bytes (used for PDF downloads)."""
+    hdrs = {"Host": site_host}
+    if headers:
+        hdrs.update(headers)
+    req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
+    try:
+        with opener.open(req, timeout=timeout) as resp:
+            return (
+                resp.status,
+                {k.lower(): v for k, v in resp.headers.items()},
+                resp.read(),
+            )
+    except urllib.error.HTTPError as exc:
+        raw = exc.read() if exc.fp else b""
+        resp_hdrs = {k.lower(): v for k, v in exc.headers.items()} if exc.headers else {}
+        return exc.code, resp_hdrs, raw
 
 
 def parse_sid_cookie_attributes(
@@ -993,7 +1196,16 @@ def read_sites_apps_txt_direct(
 
 
 def verify_common_site_config(project_name: str, env_file: pathlib.Path) -> dict[str, object]:
-    """Verifies DB, Redis, Socket.IO, and Chromium settings written by `configurator`."""
+    """Verifies DB, Redis, Socket.IO, and PDF renderer settings written by `configurator`."""
+    probe_py = (
+        "import json, os, pathlib, subprocess, weasyprint; "
+        "cfg = json.loads(pathlib.Path('/home/frappe/frappe-bench/sites/common_site_config.json').read_text(encoding='utf-8')); "
+        "chrom_bin = '/usr/lib/chromium/chromium-headless-shell'; "
+        "chrom_installed = os.access(chrom_bin, os.X_OK); "
+        "wkhtml_ver = subprocess.check_output(['wkhtmltopdf', '--version'], text=True).strip(); "
+        "fc_dejavu = 'DejaVu Sans' in subprocess.check_output(['fc-list', ':', 'family'], text=True); "
+        "print(json.dumps({'cfg': cfg, 'chromium_installed': chrom_installed, 'wkhtmltopdf': wkhtml_ver, 'weasyprint': weasyprint.__version__, 'fontconfig_dejavu_sans': fc_dejavu}))"
+    )
     proc = subprocess.run(
         compose_cmd(
             project_name,
@@ -1002,8 +1214,9 @@ def verify_common_site_config(project_name: str, env_file: pathlib.Path) -> dict
                 "exec",
                 "-T",
                 "backend",
-                "cat",
-                "/home/frappe/frappe-bench/sites/common_site_config.json",
+                "/home/frappe/frappe-bench/env/bin/python",
+                "-c",
+                probe_py,
             ],
         ),
         capture_output=True,
@@ -1012,23 +1225,43 @@ def verify_common_site_config(project_name: str, env_file: pathlib.Path) -> dict
     )
     if proc.returncode != 0:
         raise RuntimeError(
-            f"Failed reading common_site_config.json: {proc.stderr}\n{proc.stdout}"
+            f"Failed probing common_site_config.json & PDF engines: {proc.stderr}\n{proc.stdout}"
         )
-    cfg = json.loads(proc.stdout)
-    expected = {
+    probe = json.loads(proc.stdout.strip().splitlines()[-1])
+    cfg = probe["cfg"]
+    expected_core = {
         "db_host": "db",
         "db_port": 3306,
         "redis_cache": "redis://redis-cache:6379",
         "redis_queue": "redis://redis-queue:6379",
         "redis_socketio": "redis://redis-queue:6379",
         "socketio_port": 9000,
-        "chromium_path": "/usr/lib/chromium/chromium-headless-shell",
     }
-    observed = {k: cfg.get(k) for k in expected}
-    assert observed == expected, (
-        f"common_site_config.json mismatch: observed={observed} != expected={expected}"
+    observed_core = {k: cfg.get(k) for k in expected_core}
+    assert observed_core == expected_core, (
+        f"common_site_config.json core mismatch: observed={observed_core} != expected={expected_core}"
     )
-    return observed
+    if probe["chromium_installed"]:
+        assert cfg.get("chromium_path") == "/usr/lib/chromium/chromium-headless-shell", (
+            f"Expected chromium_path when Chromium binary is installed, got: {cfg.get('chromium_path')!r}"
+        )
+    else:
+        assert "chromium_path" not in cfg, (
+            f"Expected no dangling chromium_path when INSTALL_CHROMIUM=false, got: {cfg.get('chromium_path')!r}"
+        )
+    assert "0.12.6.1" in probe["wkhtmltopdf"], f"Unexpected wkhtmltopdf version: {probe['wkhtmltopdf']!r}"
+    assert probe["weasyprint"] == "70.0", f"Unexpected WeasyPrint version: {probe['weasyprint']!r}"
+    assert probe["fontconfig_dejavu_sans"] is True, "DejaVu Sans font missing in fontconfig"
+    return {
+        **observed_core,
+        "chromium_installed": probe["chromium_installed"],
+        "chromium_path": cfg.get("chromium_path"),
+        "pdf_engines": {
+            "wkhtmltopdf": probe["wkhtmltopdf"],
+            "weasyprint": probe["weasyprint"],
+            "fontconfig_dejavu_sans": probe["fontconfig_dejavu_sans"],
+        },
+    }
 
 
 def redact_socket_packet(pkt: str, logger: SmokeLogger) -> str:
@@ -1072,7 +1305,869 @@ def wait_for_ingress_ping(
     )
 
 
+def run_pdf_functional_and_rbac_smoke(
+    project_name: str,
+    env_file: pathlib.Path,
+    http_port: int,
+    site_name: str,
+    admin_opener: urllib.request.OpenerDirector,
+    logger: SmokeLogger,
+) -> dict[str, object]:
+    """Verifies real PDF rendering (`wkhtmltopdf` + `WeasyPrint`) & RBAC over live HTTP.
+
+    Covers all 7 functional dimensions required for `INSTALL_CHROMIUM=false`:
+      1. Vietnamese precomposed diacritics (`tiếng Việt`)
+      2. Embedded font + `/ToUnicode` map (`DejaVuSans`)
+      3. Multi-page table pagination (`95` rows across `>= 3` pages)
+      4. Embedded image `/XObject` (`/Subtype == '/Image'`)
+      5. Repeatable `Letter Head` header & footer across pages 1..N
+      6. Live HTTP PDF file download (`Content-Type`, `Content-Disposition`, `%PDF`..`%%EOF`)
+      7. Scoped RBAC (`Guest` -> 403, out-of-scope `Sales User` -> 403, `CSKH Work Item`
+         `print=0` -> 403, in-scope `Sales User` -> 200, `Administrator` -> 200)
+    """
+    base_url = f"http://127.0.0.1:{http_port}"
+    staff_a_email = "pdf_staff_a@cskh-smoke.local"
+    staff_b_email = "pdf_staff_b@cskh-smoke.local"
+    staff_a_pw = f"PdfSmokeA#{secrets.token_hex(12)}"
+    staff_b_pw = f"PdfSmokeB#{secrets.token_hex(12)}"
+    logger.register_secret(staff_a_pw, "<REDACTED_PDF_STAFF_A_PW>")
+    logger.register_secret(staff_b_pw, "<REDACTED_PDF_STAFF_B_PW>")
+
+    stage_py = r"""
+import io, json, os, sys
+from PIL import Image
+import frappe
+from frappe.utils import now_datetime
+from frappe.utils.password import update_password
+
+payload = json.loads(sys.stdin.read())
+site = payload["site_name"]
+staff_a = payload["staff_a_email"]
+staff_b = payload["staff_b_email"]
+
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+try:
+    frappe.set_user("Administrator")
+    frappe.db.set_single_value("Print Settings", {"repeat_header_footer": 1, "pdf_page_size": "A4"})
+
+    for email, first_name, pw in (
+        (staff_a, "Nhân viên PDF A", payload["staff_a_pw"]),
+        (staff_b, "Nhân viên PDF B", payload["staff_b_pw"]),
+    ):
+        if not frappe.db.exists("User", email):
+            u = frappe.get_doc({
+                "doctype": "User",
+                "email": email,
+                "first_name": first_name,
+                "enabled": 1,
+                "user_type": "System User",
+                "language": "vi",
+                "time_zone": "Asia/Ho_Chi_Minh",
+                "send_welcome_email": 0,
+                "roles": [{"role": "Sales User"}],
+            })
+            u.insert(ignore_permissions=True)
+        update_password(email, pw)
+
+    png_buf = io.BytesIO()
+    img = Image.new("RGB", (48, 48), (18, 92, 168))
+    for x in range(8, 40):
+        for y in range(8, 40):
+            img.putpixel((x, y), (240, 180, 32))
+    img.save(png_buf, format="PNG")
+    file_doc = frappe.get_doc({
+        "doctype": "File",
+        "file_name": "cskh-pdf-smoke-badge.png",
+        "is_private": 0,
+        "content": png_buf.getvalue(),
+    })
+    file_doc.insert(ignore_permissions=True)
+    badge_url = file_doc.file_url
+
+    lh_name = "CSKH PDF Smoke Letterhead"
+    if frappe.db.exists("Letter Head", lh_name):
+        frappe.delete_doc("Letter Head", lh_name, force=True, ignore_permissions=True)
+    frappe.get_doc({
+        "doctype": "Letter Head",
+        "letter_head_name": lh_name,
+        "is_default": 0,
+        "disabled": 0,
+        "source": "HTML",
+        "footer_source": "HTML",
+        "content": (
+            '<div style="font-family: \'DejaVu Sans\', sans-serif; font-size: 10pt; '
+            'font-weight: bold; border-bottom: 1px solid #333; padding-bottom: 4px;">'
+            'TIÊU ĐỀ ĐẦU TRANG CSKH — ĐỐI TÁC NHÂN SỰ VIỆT NAM</div>'
+        ),
+        "footer": (
+            '<div style="font-family: \'DejaVu Sans\', sans-serif; font-size: 9pt; '
+            'border-top: 1px solid #333; padding-top: 4px;">'
+            'CHÂN TRANG BẢO MẬT CSKH — TÀI LIỆU ĐỐI CHIẾU NỘI BỘ</div>'
+        ),
+    }).insert(ignore_permissions=True)
+
+    lead_doc = frappe.get_doc({
+        "doctype": "CRM Lead",
+        "first_name": "Nguyễn Thị",
+        "last_name": "Ánh Tuyết",
+        "organization": "Công ty Cổ phần Đối tác Nhân sự Đặng Quốc Cường",
+        "lead_owner": staff_a,
+    }).insert(ignore_permissions=True)
+
+    priv_buf = io.BytesIO()
+    priv_img = Image.new("RGB", (36, 36), (24, 136, 92))
+    priv_img.save(priv_buf, format="PNG")
+    priv_file_doc = frappe.get_doc({
+        "doctype": "File",
+        "file_name": "cskh-pdf-smoke-private-badge.png",
+        "is_private": 1,
+        "attached_to_doctype": "CRM Lead",
+        "attached_to_name": lead_doc.name,
+        "content": priv_buf.getvalue(),
+    })
+    priv_file_doc.insert(ignore_permissions=True)
+    private_badge_url = priv_file_doc.file_url
+
+    camp_doc = frappe.get_doc({
+        "doctype": "CSKH Campaign",
+        "code": f"PDF-SMOKE-{frappe.generate_hash(length=6).upper()}",
+        "title": "Chiến dịch Kiểm thử PDF CSKH",
+        "status": "Active",
+    }).insert(ignore_permissions=True)
+
+    wi_doc = frappe.get_doc({
+        "doctype": "CSKH Work Item",
+        "campaign": camp_doc.name,
+        "lead": lead_doc.name,
+        "status": "assigned",
+        "assigned_to": staff_a,
+        "assigned_at": now_datetime(),
+    }).insert(ignore_permissions=True)
+
+    shared_body_jinja = (
+        '<div style="font-family: \'DejaVu Sans\', sans-serif; font-size: 10pt;">'
+        '<h2>BÁO CÁO CHẤT LƯỢNG DỊCH VỤ CSKH</h2>'
+        '<p>Khách hàng: <strong>{{ doc.first_name }} {{ doc.last_name }}</strong> — '
+        'Đơn vị: {{ doc.organization }} — Giá trị: 12.500.000 ₫</p>'
+        '<p>Tổ hợp dấu A/E/O: ă â đ ê ô ơ ư Ắ Ầ Ẩ Ẫ Ậ Ế Ề Ể Ễ Ệ Ố Ồ Ổ Ỗ Ộ</p>'
+        '<p>Tổ hợp dấu Ơ/Ư: Ớ Ờ Ở Ỡ Ợ Ứ Ừ Ử Ữ Ự</p>'
+        f'<p><img src="{badge_url}" width="48" height="48" alt="CSKH Badge"/></p>'
+        '<table class="cskh-pdf-tbl" style="width: 100%; border-collapse: collapse;">'
+        '<thead><tr><th>STT</th><th>Mã dòng</th><th>Nội dung chăm sóc</th><th>Kết quả</th></tr></thead>'
+        '<tbody>'
+        '{% for idx in range(1, 96) %}'
+        '<tr>'
+        '<td style="border: 1px solid #444; padding: 5px;">{{ idx }}</td>'
+        '<td style="border: 1px solid #444; padding: 5px;">DÒNG-BẢNG-{{ "%03d" % idx }}</td>'
+        '<td style="border: 1px solid #444; padding: 5px;">Hồ sơ chăm sóc khách hàng tiếng Việt đợt {{ idx }}</td>'
+        '<td style="border: 1px solid #444; padding: 5px;">Đạt chuẩn SLA</td>'
+        '</tr>'
+        '{% endfor %}'
+        '</tbody></table></div>'
+    )
+
+    pf_wk = "CSKH Smoke Wkhtmltopdf MultiPage"
+    if frappe.db.exists("Print Format", pf_wk):
+        frappe.delete_doc("Print Format", pf_wk, force=True, ignore_permissions=True)
+    frappe.get_doc({
+        "doctype": "Print Format",
+        "name": pf_wk,
+        "doc_type": "CRM Lead",
+        "module": "FCRM",
+        "standard": "No",
+        "custom_format": 1,
+        "print_format_type": "Jinja",
+        "pdf_generator": "wkhtmltopdf",
+        "disabled": 0,
+        "html": (
+            '<style>.print-format { font-family: "DejaVu Sans", sans-serif; '
+            'margin-top: 28mm; margin-bottom: 26mm; margin-left: 15mm; margin-right: 15mm; } '
+            'thead { display: table-header-group; } tr { page-break-inside: avoid; }</style>'
+            '<div id="header-html">{{ letter_head or "" }}</div>'
+            + shared_body_jinja
+            + '<div id="footer-html">{{ footer or "" }}</div>'
+        ),
+    }).insert(ignore_permissions=True)
+
+    pf_wp = "CSKH Smoke WeasyPrint MultiPage"
+    if frappe.db.exists("Print Format", pf_wp):
+        frappe.delete_doc("Print Format", pf_wp, force=True, ignore_permissions=True)
+    frappe.get_doc({
+        "doctype": "Print Format",
+        "name": pf_wp,
+        "doc_type": "CRM Lead",
+        "module": "FCRM",
+        "standard": "No",
+        "custom_format": 0,
+        "print_format_builder_beta": 1,
+        "margin_top": 22,
+        "margin_bottom": 22,
+        "margin_left": 15,
+        "margin_right": 15,
+        "page_number": "Bottom Right",
+        "font_size": 10,
+        "disabled": 0,
+        "css": (
+            "html, body, table, th, td, div, p, h2, header, footer { "
+            "font-family: 'DejaVu Sans', sans-serif !important; }"
+        ),
+        "format_data": json.dumps({
+            "header": "",
+            "footer": "",
+            "sections": [{
+                "label": "",
+                "page_break": False,
+                "columns": [{
+                    "fields": [{
+                        "label": "Custom HTML",
+                        "fieldname": "custom_html",
+                        "fieldtype": "HTML",
+                        "html": shared_body_jinja,
+                    }]
+                }],
+            }],
+        }),
+    }).insert(ignore_permissions=True)
+
+    frappe.db.commit()
+    frappe.clear_cache()
+    print(json.dumps({
+        "lead_name": lead_doc.name,
+        "work_item_name": wi_doc.name,
+        "campaign_name": camp_doc.name,
+        "file_name": file_doc.name,
+        "badge_url": badge_url,
+        "private_file_name": priv_file_doc.name,
+        "private_badge_url": private_badge_url,
+        "letterhead": lh_name,
+        "wkhtmltopdf_format": pf_wk,
+        "weasyprint_format": pf_wp,
+    }))
+finally:
+    frappe.destroy()
+"""
+    stage_proc = subprocess.run(
+        compose_cmd(
+            project_name,
+            env_file,
+            ["exec", "-T", "backend", "/home/frappe/frappe-bench/env/bin/python", "-c", stage_py],
+        ),
+        input=json.dumps(
+            {
+                "site_name": site_name,
+                "staff_a_email": staff_a_email,
+                "staff_b_email": staff_b_email,
+                "staff_a_pw": staff_a_pw,
+                "staff_b_pw": staff_b_pw,
+            }
+        ),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if stage_proc.returncode != 0:
+        raise RuntimeError(
+            f"Staging PDF smoke fixtures failed: {stage_proc.stderr}\n{stage_proc.stdout}"
+        )
+    staged = json.loads([ln for ln in stage_proc.stdout.splitlines() if ln.strip()][-1])
+
+    try:
+        wk_qs = urllib.parse.urlencode(
+            {
+                "doctype": "CRM Lead",
+                "name": staged["lead_name"],
+                "format": staged["wkhtmltopdf_format"],
+                "letterhead": staged["letterhead"],
+                "no_letterhead": "0",
+            }
+        )
+        wp_qs = urllib.parse.urlencode(
+            {
+                "doctype": "CRM Lead",
+                "name": staged["lead_name"],
+                "print_format": staged["weasyprint_format"],
+                "letterhead": staged["letterhead"],
+            }
+        )
+        wi_qs = urllib.parse.urlencode(
+            {
+                "doctype": "CSKH Work Item",
+                "name": staged["work_item_name"],
+                "letterhead": staged["letterhead"],
+                "no_letterhead": "0",
+            }
+        )
+        wk_url = f"{base_url}/api/method/frappe.utils.print_format.download_pdf?{wk_qs}"
+        wp_url = f"{base_url}/api/method/frappe.utils.weasyprint.download_pdf?{wp_qs}"
+        wi_url = f"{base_url}/api/method/frappe.utils.print_format.download_pdf?{wi_qs}"
+
+        def _login_staff(email: str, pw: str) -> urllib.request.OpenerDirector:
+            s_jar, s_opener = make_http_client()
+            st, _, _, raw = http_call_with_cookies(
+                s_opener,
+                f"{base_url}/api/method/login",
+                site_name,
+                method="POST",
+                data=urllib.parse.urlencode({"usr": email, "pwd": pw}).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Accept": "application/json",
+                },
+            )
+            assert st == 200, f"Staff login failed for {email}: HTTP {st} {raw[:200]}"
+            s_sid = next((c.value for c in s_jar if c.name == "sid"), "")
+            if s_sid:
+                logger.register_secret(s_sid, "<REDACTED_FRAPPE_SID>")
+            return s_opener
+
+        _, guest_pdf_opener = make_http_client()
+        staff_a_opener = _login_staff(staff_a_email, staff_a_pw)
+        staff_b_opener = _login_staff(staff_b_email, staff_b_pw)
+
+        guest_wk_code, _, guest_wk_raw = http_call_bytes(guest_pdf_opener, wk_url, site_name)
+        guest_wp_code, _, guest_wp_raw = http_call_bytes(guest_pdf_opener, wp_url, site_name)
+        guest_wi_code, _, guest_wi_raw = http_call_bytes(guest_pdf_opener, wi_url, site_name)
+        staff_b_wk_code, _, staff_b_wk_raw = http_call_bytes(staff_b_opener, wk_url, site_name)
+        staff_b_wp_code, _, staff_b_wp_raw = http_call_bytes(staff_b_opener, wp_url, site_name)
+        staff_b_wi_code, _, staff_b_wi_raw = http_call_bytes(staff_b_opener, wi_url, site_name)
+
+        for label, code_val, raw_val in (
+            ("guest_wkhtmltopdf_lead", guest_wk_code, guest_wk_raw),
+            ("guest_weasyprint_lead", guest_wp_code, guest_wp_raw),
+            ("guest_wkhtmltopdf_work_item", guest_wi_code, guest_wi_raw),
+            ("out_of_scope_staff_b_wkhtmltopdf_lead", staff_b_wk_code, staff_b_wk_raw),
+            ("out_of_scope_staff_b_weasyprint_lead", staff_b_wp_code, staff_b_wp_raw),
+            ("out_of_scope_staff_b_wkhtmltopdf_work_item", staff_b_wi_code, staff_b_wi_raw),
+        ):
+            assert code_val == 403 and not raw_val.startswith(b"%PDF"), (
+                f"Expected HTTP 403 non-PDF on {label}, got HTTP {code_val} ({raw_val[:80]!r})"
+            )
+
+        staff_a_wk_code, staff_a_wk_hdrs, staff_a_wk_pdf = http_call_bytes(
+            staff_a_opener, wk_url, site_name
+        )
+        staff_a_wp_code, staff_a_wp_hdrs, staff_a_wp_pdf = http_call_bytes(
+            staff_a_opener, wp_url, site_name
+        )
+        staff_a_wi_code, staff_a_wi_hdrs, staff_a_wi_pdf = http_call_bytes(
+            staff_a_opener, wi_url, site_name
+        )
+        admin_wi_code, admin_wi_hdrs, admin_wi_pdf = http_call_bytes(
+            admin_opener, wi_url, site_name
+        )
+
+        for label, code_val, hdrs_val, pdf_bytes in (
+            ("in_scope_staff_a_wkhtmltopdf", staff_a_wk_code, staff_a_wk_hdrs, staff_a_wk_pdf),
+            ("in_scope_staff_a_weasyprint", staff_a_wp_code, staff_a_wp_hdrs, staff_a_wp_pdf),
+            ("in_scope_staff_a_work_item_wkhtmltopdf", staff_a_wi_code, staff_a_wi_hdrs, staff_a_wi_pdf),
+            ("admin_work_item_wkhtmltopdf", admin_wi_code, admin_wi_hdrs, admin_wi_pdf),
+        ):
+            ctype = str(hdrs_val.get("content-type") or "").lower()
+            cdisp = str(hdrs_val.get("content-disposition") or "")
+            assert code_val == 200, (
+                f"{label} failed: HTTP {code_val} body={pdf_bytes[:300].decode('utf-8', errors='replace')}"
+            )
+            assert ctype.startswith("application/pdf"), f"{label} unexpected Content-Type: {ctype!r}"
+            assert ".pdf" in cdisp.lower(), f"{label} missing .pdf filename in Content-Disposition: {cdisp!r}"
+            assert pdf_bytes.startswith(b"%PDF-1.") and b"%%EOF" in pdf_bytes[-128:], (
+                f"{label} invalid PDF header/trailer (len={len(pdf_bytes)})"
+            )
+
+        inspect_pdf_py = r"""
+import base64, io, json, sys, unicodedata
+from pypdf import PdfReader
+
+req = json.loads(sys.stdin.read())
+out = {}
+
+def _compact(s: str) -> str:
+    return "".join(unicodedata.normalize("NFC", s or "").split())
+
+def walk_resources(res_obj, fonts, images, seen):
+    if not res_obj:
+        return
+    res = res_obj.get_object() if hasattr(res_obj, "get_object") else res_obj
+    obj_id = id(res)
+    if obj_id in seen or not isinstance(res, dict):
+        return
+    seen.add(obj_id)
+    fdict = res.get("/Font")
+    if fdict:
+        fdict = fdict.get_object() if hasattr(fdict, "get_object") else fdict
+        for _, fref in fdict.items():
+            fo = fref.get_object() if hasattr(fref, "get_object") else fref
+            base_font = str(fo.get("/BaseFont") or "")
+            has_tounicode = "/ToUnicode" in fo
+            fonts.append({"base_font": base_font, "has_tounicode": has_tounicode})
+    xdict = res.get("/XObject")
+    if xdict:
+        xdict = xdict.get_object() if hasattr(xdict, "get_object") else xdict
+        for _, xref in xdict.items():
+            xo = xref.get_object() if hasattr(xref, "get_object") else xref
+            subtype = str(xo.get("/Subtype") or "")
+            if subtype == "/Image":
+                images.append({"width": int(xo.get("/Width") or 0), "height": int(xo.get("/Height") or 0)})
+            elif subtype == "/Form":
+                walk_resources(xo.get("/Resources"), fonts, images, seen)
+    pdict = res.get("/Pattern")
+    if pdict:
+        pdict = pdict.get_object() if hasattr(pdict, "get_object") else pdict
+        if isinstance(pdict, dict):
+            for _, pref in pdict.items():
+                po = pref.get_object() if hasattr(pref, "get_object") else pref
+                if isinstance(po, dict):
+                    walk_resources(po.get("/Resources"), fonts, images, seen)
+
+for engine_key, b64_str in req.items():
+    raw = base64.b64decode(b64_str)
+    reader = PdfReader(io.BytesIO(raw))
+    page_texts = [unicodedata.normalize("NFC", p.extract_text() or "") for p in reader.pages]
+    page_compact = [_compact(t) for t in page_texts]
+    full_compact = "".join(page_compact)
+    fonts, images, seen = [], [], set()
+    for p in reader.pages:
+        walk_resources(p.get("/Resources"), fonts, images, seen)
+    unique_fonts = sorted({f["base_font"] for f in fonts if f["base_font"]})
+    tounicode_count = sum(1 for f in fonts if f["has_tounicode"])
+    out[engine_key] = {
+        "byte_length": len(raw),
+        "page_count": len(reader.pages),
+        "fonts_detected": unique_fonts,
+        "dejavu_font_embedded": any("dejavu" in bf.lower() for bf in unique_fonts),
+        "tounicode_cmap_count": tounicode_count,
+        "image_xobject_count": len(images),
+        "images": images[:5],
+        "page_1_preview": " ".join(page_texts[0].split())[:220] if page_texts else "",
+        "vietnamese_checks": {
+            "report_title": _compact("BÁO CÁO CHẤT LƯỢNG DỊCH VỤ CSKH") in full_compact,
+            "customer_name": _compact("Nguyễn Thị Ánh Tuyết") in full_compact,
+            "organization_name": _compact("Đặng Quốc Cường") in full_compact,
+            "currency_dong": _compact("12.500.000 ₫") in full_compact,
+            "tone_matrix_a": _compact("Ắ Ầ Ẩ Ẫ Ậ") in full_compact,
+            "tone_matrix_u": _compact("Ứ Ừ Ử Ữ Ự") in full_compact,
+        },
+        "multipage_table_checks": {
+            "row_001_on_page_1": bool(page_compact) and (_compact("DÒNG-BẢNG-001") in page_compact[0]),
+            "row_050_after_page_1": any(_compact("DÒNG-BẢNG-050") in pg for pg in page_compact[1:]),
+            "row_095_on_page_3_or_later": (
+                len(page_compact) >= 3
+                and any(_compact("DÒNG-BẢNG-095") in pg for pg in page_compact[2:])
+                and (_compact("DÒNG-BẢNG-095") not in page_compact[0])
+            ),
+        },
+        "header_footer_checks": {
+            "header_on_page_1": bool(page_compact) and (_compact("TIÊU ĐỀ ĐẦU TRANG CSKH") in page_compact[0]),
+            "header_on_page_2": len(page_compact) >= 2 and (_compact("TIÊU ĐỀ ĐẦU TRANG CSKH") in page_compact[1]),
+            "header_on_page_3": len(page_compact) >= 3 and (_compact("TIÊU ĐỀ ĐẦU TRANG CSKH") in page_compact[2]),
+            "footer_on_page_1": bool(page_compact) and (_compact("CHÂN TRANG BẢO MẬT CSKH") in page_compact[0]),
+            "footer_on_page_2": len(page_compact) >= 2 and (_compact("CHÂN TRANG BẢO MẬT CSKH") in page_compact[1]),
+            "footer_on_page_3": len(page_compact) >= 3 and (_compact("CHÂN TRANG BẢO MẬT CSKH") in page_compact[2]),
+        },
+    }
+
+print(json.dumps(out, ensure_ascii=False))
+"""
+        insp_proc = subprocess.run(
+            compose_cmd(
+                project_name,
+                env_file,
+                [
+                    "exec",
+                    "-T",
+                    "backend",
+                    "/home/frappe/frappe-bench/env/bin/python",
+                    "-c",
+                    inspect_pdf_py,
+                ],
+            ),
+            input=json.dumps(
+                {
+                    "wkhtmltopdf": base64.b64encode(staff_a_wk_pdf).decode("ascii"),
+                    "weasyprint": base64.b64encode(staff_a_wp_pdf).decode("ascii"),
+                }
+            ),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if insp_proc.returncode != 0:
+            raise RuntimeError(
+                f"pypdf structural inspection failed: {insp_proc.stderr}\n{insp_proc.stdout}"
+            )
+        inspected = json.loads([ln for ln in insp_proc.stdout.splitlines() if ln.strip()][-1])
+
+        for eng in ("wkhtmltopdf", "weasyprint"):
+            ed = inspected[eng]
+            assert ed["page_count"] >= 3, f"{eng}: expected >= 3 pages, got {ed['page_count']}"
+            assert ed["dejavu_font_embedded"] is True and ed["tounicode_cmap_count"] >= 1, (
+                f"{eng}: font embedding failed: {ed}"
+            )
+            assert ed["image_xobject_count"] >= 1, f"{eng}: missing embedded image XObject: {ed}"
+            assert all(ed["vietnamese_checks"].values()), (
+                f"{eng}: Vietnamese text extraction failed: {ed['vietnamese_checks']}"
+            )
+            assert all(ed["multipage_table_checks"].values()), (
+                f"{eng}: multi-page table pagination check failed: {ed['multipage_table_checks']}"
+            )
+            assert all(ed["header_footer_checks"].values()), (
+                f"{eng}: repeatable header/footer check failed: {ed['header_footer_checks']}"
+            )
+
+        rq_worker_pdf_py = r"""
+import json, os, socket, sys, time
+import frappe
+from rq.job import Job
+from frappe.utils.background_jobs import get_redis_conn
+
+req = json.loads(sys.stdin.read())
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=req["site_name"], sites_path=".")
+frappe.connect()
+try:
+    frappe.set_user("Administrator")
+    backend_host = socket.gethostname()
+    conn = get_redis_conn()
+
+    def _wait_job(job_id: str, timeout_sec: float = 75.0) -> tuple[str, str | None]:
+        dl = time.monotonic() + timeout_sec
+        st = "unknown"
+        exc = None
+        while time.monotonic() < dl:
+            fetched = Job.fetch(job_id, connection=conn)
+            st = fetched.get_status(refresh=True)
+            if st in ("finished", "failed", "stopped", "canceled"):
+                exc = fetched.exc_info
+                break
+            time.sleep(0.5)
+        return st, exc
+
+    # 1. Real forked `queue-short` non-PDF RQ job must NOT load WeasyPrint or PDF engines
+    nonpdf_key = f"cskh:smoke:rq_nonpdf:{frappe.generate_hash(length=10)}"
+    nonpdf_job = frappe.enqueue(
+        "crm_cskh.services.pdf_hooks.run_rq_non_pdf_probe_job",
+        queue="short",
+        timeout=60,
+        enqueue_after_commit=False,
+        result_cache_key=nonpdf_key,
+    )
+    nonpdf_status, nonpdf_exc = _wait_job(nonpdf_job.id, 60.0)
+    nonpdf_payload = frappe.cache.get_value(nonpdf_key)
+    frappe.cache.delete_value(nonpdf_key)
+
+    # 2. Real forked `queue-short` PDF RQ job must lazily enforce full security & render 7-dim PDFs
+    cache_key = f"cskh:smoke:rq_pdf:{frappe.generate_hash(length=10)}"
+    rq_job = frappe.enqueue(
+        "crm_cskh.services.pdf_assets.run_rq_pdf_verification_job",
+        queue="short",
+        timeout=180,
+        enqueue_after_commit=False,
+        doctype="CRM Lead",
+        name=req["lead_name"],
+        wkhtmltopdf_format=req["wkhtmltopdf_format"],
+        weasyprint_format=req["weasyprint_format"],
+        letterhead=req["letterhead"],
+        authorized_user=req["staff_a_email"],
+        unauthorized_user=req["staff_b_email"],
+        private_file_url=req["private_badge_url"],
+        result_cache_key=cache_key,
+    )
+    final_status, exc_info = _wait_job(rq_job.id, 75.0)
+    worker_payload = frappe.cache.get_value(cache_key)
+    frappe.cache.delete_value(cache_key)
+    print(json.dumps({
+        "non_pdf_rq_job_id": nonpdf_job.id,
+        "non_pdf_rq_job_status": nonpdf_status,
+        "non_pdf_rq_exc_info": nonpdf_exc,
+        "non_pdf_worker_result": nonpdf_payload,
+        "rq_job_id": rq_job.id,
+        "rq_job_status": final_status,
+        "rq_exc_info": exc_info,
+        "backend_hostname": backend_host,
+        "worker_result": worker_payload,
+    }, ensure_ascii=False))
+finally:
+    frappe.destroy()
+"""
+        rq_proc = subprocess.run(
+            compose_cmd(
+                project_name,
+                env_file,
+                [
+                    "exec",
+                    "-T",
+                    "backend",
+                    "/home/frappe/frappe-bench/env/bin/python",
+                    "-c",
+                    rq_worker_pdf_py,
+                ],
+            ),
+            input=json.dumps(
+                {
+                    "site_name": site_name,
+                    "staff_a_email": staff_a_email,
+                    "staff_b_email": staff_b_email,
+                    **staged,
+                }
+            ),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if rq_proc.returncode != 0:
+            raise RuntimeError(
+                f"RQ worker PDF verification failed: {rq_proc.stderr}\n{rq_proc.stdout}"
+            )
+        rq_pdf_info = json.loads([ln for ln in rq_proc.stdout.splitlines() if ln.strip()][-1])
+        assert rq_pdf_info["non_pdf_rq_job_status"] == "finished" and not rq_pdf_info["non_pdf_rq_exc_info"], (
+            f"Non-PDF RQ worker probe did not finish cleanly: {rq_pdf_info}"
+        )
+        npres = rq_pdf_info["non_pdf_worker_result"]
+        assert isinstance(npres, dict) and npres.get("status") == "PASS", rq_pdf_info
+        assert npres["worker_hostname"] != rq_pdf_info["backend_hostname"], rq_pdf_info
+        assert npres["hook_guard_armed"] is True, npres
+        assert npres["any_pdf_engine_loaded"] is False, (
+            f"Non-PDF RQ job loaded PDF engines eagerly: {npres}"
+        )
+
+        assert rq_pdf_info["rq_job_status"] == "finished" and not rq_pdf_info["rq_exc_info"], (
+            f"RQ worker PDF job did not finish cleanly: {rq_pdf_info}"
+        )
+        wres = rq_pdf_info["worker_result"]
+        assert isinstance(wres, dict) and wres.get("status") == "PASS", rq_pdf_info
+        assert wres["worker_hostname"] != rq_pdf_info["backend_hostname"], (
+            f"Expected separate queue-short container hostname, got {rq_pdf_info}"
+        )
+        assert wres["hooks_preinstalled_by_before_job"] is True, wres
+        assert all(v is False for v in wres["pre_first_call_modules"].values()), (
+            f"before_job eagerly imported PDF modules before job body: {wres['pre_first_call_modules']}"
+        )
+        for eng in ("wkhtmltopdf", "weasyprint"):
+            assert wres[eng]["valid_pdf_envelope"] is True, (eng, wres[eng])
+            assert wres[eng]["page_count"] >= 3, (eng, wres[eng])
+            assert wres[eng]["dejavu_font_embedded"] is True, (eng, wres[eng])
+            assert wres[eng]["contains_vietnamese_title"] is True, (eng, wres[eng])
+        wprobe = wres["private_file_and_ssrf_probe"]
+        assert wprobe["authorized_large_images_wk"] == 1 and wprobe["authorized_large_images_wp"] == 1, wprobe
+        assert wprobe["unauthorized_large_images_wk"] == 0 and wprobe["unauthorized_large_images_wp"] == 0, wprobe
+
+        logger.info(
+            "PDF functional, RBAC & real RQ worker smoke passed across wkhtmltopdf + WeasyPrint: "
+            f"wk_pages={inspected['wkhtmltopdf']['page_count']}, "
+            f"wp_pages={inspected['weasyprint']['page_count']}, "
+            f"rq_worker_host={wres['worker_hostname']}, "
+            "rbac={guest:403, out_of_scope_staff:403, in_scope_staff:200, admin:200}"
+        )
+        return {
+            "status": "PASS",
+            "rbac_matrix": {
+                "guest_wkhtmltopdf_lead_status": guest_wk_code,
+                "guest_weasyprint_lead_status": guest_wp_code,
+                "guest_wkhtmltopdf_work_item_status": guest_wi_code,
+                "out_of_scope_staff_wkhtmltopdf_lead_status": staff_b_wk_code,
+                "out_of_scope_staff_weasyprint_lead_status": staff_b_wp_code,
+                "out_of_scope_staff_wkhtmltopdf_work_item_status": staff_b_wi_code,
+                "in_scope_staff_wkhtmltopdf_lead_status": staff_a_wk_code,
+                "in_scope_staff_weasyprint_lead_status": staff_a_wp_code,
+                "in_scope_staff_work_item_standard_pdf_status": staff_a_wi_code,
+                "in_scope_staff_work_item_standard_pdf_bytes": len(staff_a_wi_pdf),
+                "admin_work_item_standard_pdf_status": admin_wi_code,
+                "admin_work_item_standard_pdf_bytes": len(admin_wi_pdf),
+            },
+            "http_download_headers": {
+                "wkhtmltopdf_content_type": staff_a_wk_hdrs.get("content-type"),
+                "wkhtmltopdf_content_disposition": staff_a_wk_hdrs.get("content-disposition"),
+                "weasyprint_content_type": staff_a_wp_hdrs.get("content-type"),
+                "weasyprint_content_disposition": staff_a_wp_hdrs.get("content-disposition"),
+            },
+            "engines_verified": inspected,
+            "rq_worker_pdf_verification": rq_pdf_info,
+        }
+    finally:
+        cleanup_py = r"""
+import json, os, sys, frappe
+d = json.loads(sys.stdin.read())
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=d["site_name"], sites_path=".")
+frappe.connect()
+try:
+    frappe.set_user("Administrator")
+    for dt, dn in (
+        ("CSKH Work Item", d["work_item_name"]),
+        ("CSKH Campaign", d["campaign_name"]),
+        ("CRM Lead", d["lead_name"]),
+        ("Print Format", d["wkhtmltopdf_format"]),
+        ("Print Format", d["weasyprint_format"]),
+        ("Letter Head", d["letterhead"]),
+        ("File", d.get("private_file_name")),
+        ("File", d["file_name"]),
+    ):
+        if dn and frappe.db.exists(dt, dn):
+            frappe.delete_doc(dt, dn, force=True, ignore_permissions=True)
+    frappe.db.commit()
+finally:
+    frappe.destroy()
+"""
+        subprocess.run(
+            compose_cmd(
+                project_name,
+                env_file,
+                ["exec", "-T", "backend", "/home/frappe/frappe-bench/env/bin/python", "-c", cleanup_py],
+            ),
+            input=json.dumps({"site_name": site_name, **staged}),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+
+
+def check_crm_branding_reload(
+    status: int | None,
+    body: str,
+    *,
+    phase: str,
+    reload_index: int,
+    favicon: str,
+    logo: str,
+    logger: SmokeLogger,
+    require_prepaint: bool = False,
+    previous_logo: str = "",
+    transport_error: str = "",
+) -> None:
+    """Preserve strict branding checks and capture sanitized diagnostics before reset."""
+    import html as _html
+
+    body_text = body if isinstance(body, str) else str(body or "")
+    marker_present = 'id="hrpartner-branding-prepaint"' in body_text
+    failures: list[str] = []
+    if transport_error:
+        failures.append("http_transport_error")
+    else:
+        if status != 200:
+            failures.append("http_status")
+        if f'href="{favicon}"' not in body_text:
+            failures.append("favicon")
+        if logo not in body_text or (require_prepaint and not marker_present):
+            failures.append("prepaint_logo")
+        if previous_logo and previous_logo in body_text:
+            failures.append("previous_logo")
+    if not failures:
+        return
+
+    class IconLinks(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=True)
+            self.hrefs: list[str] = []
+            self.truncated = False
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            if tag.lower() != "link":
+                return
+            values: dict[str, str] = {}
+            for key, val in attrs:
+                if key:
+                    values.setdefault(key.lower(), val or "")
+            if "icon" in values.get("rel", "").lower().split():
+                if len(self.hrefs) < 10:
+                    self.hrefs.append(logger.sanitize_url(values.get("href", "")))
+                else:
+                    self.truncated = True
+
+    hrefs: list[str] = []
+    truncated = False
+    parse_error: str | None = None
+    try:
+        if body_text:
+            links = IconLinks()
+            try:
+                links.feed(body_text[:262144])
+                links.close()
+                hrefs = links.hrefs
+                truncated = links.truncated
+            except Exception as exc:
+                # HTML is untrusted; diagnostic extraction must never replace primary failure.
+                parse_error = type(exc).__name__
+                hrefs = list(links.hrefs)
+                truncated = links.truncated
+                salvaged: list[str] = []
+                salvaged_truncated = False
+                for tag_match in re.finditer(r"(?is)<link\b([^>]{0,2048})>", body_text[:65536]):
+                    attrs_map: dict[str, str] = {}
+                    for attr_match in re.finditer(
+                        r"""(?is)\b(rel|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))""",
+                        tag_match.group(1),
+                    ):
+                        attr_name = attr_match.group(1).lower()
+                        if attr_name not in attrs_map:
+                            raw_attr = (
+                                attr_match.group(2)
+                                if attr_match.group(2) is not None
+                                else (
+                                    attr_match.group(3)
+                                    if attr_match.group(3) is not None
+                                    else (attr_match.group(4) or "")
+                                )
+                            )
+                            attrs_map[attr_name] = _html.unescape(raw_attr)
+                    if "icon" in attrs_map.get("rel", "").lower().split():
+                        if len(salvaged) < 10:
+                            salvaged.append(logger.sanitize_url(attrs_map.get("href", "")))
+                        else:
+                            salvaged_truncated = True
+                            break
+                if len(salvaged) >= len(hrefs):
+                    hrefs = salvaged
+                    truncated = truncated or salvaged_truncated
+    except Exception as exc:
+        parse_error = parse_error or type(exc).__name__
+
+    if transport_error:
+        raw_error = f"Transport error on /crm/leads: {logger.sanitize_error(transport_error)}"
+    elif status != 200:
+        raw_error = f"HTTP {status} error on /crm/leads ({', '.join(failures)})"
+    else:
+        raw_error = f"Branding mismatch on HTTP 200 /crm/leads ({', '.join(failures)})"
+
+    detail = logger.scrub(
+        json.dumps(
+            {
+                "phase": phase,
+                "reload_index": reload_index,
+                "http_status": status,
+                "failures": failures,
+                "error": logger.sanitize_error(raw_error),
+                "expected_icon_href": logger.sanitize_url(favicon),
+                "actual_icon_hrefs": hrefs,
+                "actual_icon_hrefs_truncated": truncated,
+                "icon_parse_error": parse_error,
+                "prepaint_marker_present": marker_present,
+                "has_prepaint_comment": "<!-- hrpartner-branding-prepaint -->" in body_text,
+                "has_crm_app_root": 'id="app"' in body_text,
+                "has_crm_theme": 'data-cskh-crm-theme="1"' in body_text,
+                "body_len": len(body_text),
+                "expected_logo_present": bool(body_text and logo and logo in body_text),
+                "previous_logo_present": bool(
+                    body_text and previous_logo and previous_logo in body_text
+                ),
+                "body_sha256": (
+                    hashlib.sha256(body_text.encode("utf-8", errors="replace")).hexdigest()
+                    if not transport_error
+                    else None
+                ),
+            },
+            sort_keys=True,
+        )
+    )
+    logger.assert_clean(detail)
+    logger.info(f"CRM branding reload failed before branding reset: {detail}")
+    raise AssertionError(f"CRM branding reload failed: {detail}")
+
+
 def run_http_and_socketio_smoke(
+    project_name: str,
+    env_file: pathlib.Path,
     http_port: int,
     site_name: str,
     admin_pw: str,
@@ -1149,14 +2244,22 @@ def run_http_and_socketio_smoke(
         f"set_cookie_headers={sid_cookie_attrs['set_cookie_header_count']}"
     )
 
-    # 3. Vietnamese UI + timezone + CSRF token extraction
+    # 3. Vietnamese UI + SaaS shell/theme + timezone + CSRF token extraction
     dash_code, _, dash_html = http_call(auth_opener, f"{base_url}/cskh/dashboard", site_name)
     assert dash_code == 200, f"Expected 200 on /cskh/dashboard, got {dash_code}"
     assert "Asia/Ho_Chi_Minh" in dash_html, "Missing Asia/Ho_Chi_Minh timezone in /cskh/dashboard"
+    assert 'class="cskh-sidebar"' in dash_html, "Missing cskh-sidebar in /cskh/dashboard"
+    assert 0 <= dash_html.find("/assets/crm_cskh/cskh/cskh.css") < dash_html.find("</head>"), (
+        "Expected cskh.css inside <head> on /cskh/dashboard"
+    )
 
     ui_code, _, ui_html = http_call(auth_opener, f"{base_url}/cskh/quality-overview", site_name)
     assert ui_code == 200, f"Expected 200 on /cskh/quality-overview, got {ui_code}"
     assert "Asia/Ho_Chi_Minh" in ui_html, "Missing Asia/Ho_Chi_Minh timezone in /cskh/quality-overview"
+    assert 'class="cskh-sidebar"' in ui_html, "Missing cskh-sidebar in /cskh/quality-overview"
+    assert 0 <= ui_html.find("/assets/crm_cskh/cskh/cskh.css") < ui_html.find("</head>"), (
+        "Expected cskh.css inside <head> on /cskh/quality-overview"
+    )
 
     candidate_vi_labels = [
         "Đã đăng nhập với tư cách",
@@ -1184,8 +2287,10 @@ def run_http_and_socketio_smoke(
     csrf_token = csrf_match.group(1)
     logger.register_secret(csrf_token, "<REDACTED_CSRF_TOKEN>")
 
-    crm_code, _, _ = http_call(auth_opener, f"{base_url}/crm", site_name)
+    crm_code, _, crm_html = http_call(auth_opener, f"{base_url}/crm", site_name)
     assert crm_code == 200, f"Expected 200 on authenticated /crm, got {crm_code}"
+    assert 'data-cskh-crm-theme="1"' in crm_html, "Missing crm-theme.css link in authenticated /crm HTML"
+    assert "crm-sidebar-bridge.js" in crm_html, "Missing crm-sidebar-bridge.js in authenticated /crm HTML"
     logger.info(
         f"Vietnamese UI & SPA checks passed: /cskh/dashboard={dash_code}, "
         f"/cskh/quality-overview={ui_code}, /crm={crm_code}, matched_labels={matched_vi_labels}"
@@ -1246,6 +2351,153 @@ def run_http_and_socketio_smoke(
         f"CSRF checks passed: forged={forged_csrf_code}, missing={missing_csrf_code}, "
         f"valid={good_csrf_code} (app_version={good_csrf_json.get('app_version')})"
     )
+
+    # 4b. HRPARTNER /crm prepaint favicon+logo on reload & /cskh warm-cache branding rotation
+    def _smoke_set_branding(splash_val: str, fav_val: str) -> None:
+        b_code, _, b_body = http_call(
+            auth_opener,
+            f"{base_url}/api/method/frappe.client.set_value",
+            site_name,
+            method="POST",
+            data=json.dumps(
+                {
+                    "doctype": "Website Settings",
+                    "name": "Website Settings",
+                    "fieldname": {"splash_image": splash_val, "favicon": fav_val},
+                }
+            ).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "X-Frappe-CSRF-Token": csrf_token,
+            },
+        )
+        assert b_code == 200, f"Branding update failed ({b_code}): {logger.sanitize_error(b_body)}"
+
+    b_logo_v1 = "/assets/crm_cskh/cskh/logo.svg?brand=smoke-v1"
+    b_fav_v1 = "/assets/crm_cskh/cskh/logo.svg?fav=smoke-v1"
+    b_logo_v2 = "/assets/crm_cskh/cskh/logo.svg?brand=smoke-v2"
+    b_fav_v2 = "/assets/crm_cskh/cskh/logo.svg?fav=smoke-v2"
+
+    def _check_crm_leads_reload(
+        *,
+        phase: str,
+        reload_index: int,
+        favicon: str,
+        logo: str,
+        require_prepaint: bool = False,
+        previous_logo: str = "",
+    ) -> None:
+        try:
+            st, _, html = http_call(auth_opener, f"{base_url}/crm/leads", site_name)
+        except Exception as transport_exc:
+            check_crm_branding_reload(
+                None,
+                "",
+                phase=phase,
+                reload_index=reload_index,
+                favicon=favicon,
+                logo=logo,
+                logger=logger,
+                require_prepaint=require_prepaint,
+                previous_logo=previous_logo,
+                transport_error=f"{type(transport_exc).__name__}: {transport_exc}",
+            )
+            raise
+        check_crm_branding_reload(
+            st,
+            html,
+            phase=phase,
+            reload_index=reload_index,
+            favicon=favicon,
+            logo=logo,
+            logger=logger,
+            require_prepaint=require_prepaint,
+            previous_logo=previous_logo,
+        )
+
+    primary_branding_exc: BaseException | None = None
+    active_phase = "v1"
+    active_reload_index = 0
+    active_favicon = b_fav_v1
+    try:
+        _smoke_set_branding(b_logo_v1, b_fav_v1)
+        for reload_index in range(1, 7):
+            active_phase = "v1"
+            active_reload_index = reload_index
+            active_favicon = b_fav_v1
+            _check_crm_leads_reload(
+                phase="v1",
+                reload_index=reload_index,
+                favicon=b_fav_v1,
+                logo=b_logo_v1,
+                require_prepaint=True,
+            )
+            k1_st, _, k1_html = http_call(auth_opener, f"{base_url}/cskh/dashboard", site_name)
+            assert (
+                k1_st == 200
+                and f'src="{b_logo_v1}"' in k1_html
+                and 'class="cskh-sidebar-logo is-brand-logo"' in k1_html
+            ), "Missing brand logo v1 on /cskh/dashboard"
+
+        active_phase = "v2"
+        active_reload_index = 0
+        active_favicon = b_fav_v2
+        _smoke_set_branding(b_logo_v2, b_fav_v2)
+        for reload_index in range(1, 7):
+            active_phase = "v2"
+            active_reload_index = reload_index
+            active_favicon = b_fav_v2
+            _check_crm_leads_reload(
+                phase="v2",
+                reload_index=reload_index,
+                favicon=b_fav_v2,
+                logo=b_logo_v2,
+                previous_logo=b_logo_v1,
+            )
+            k2_st, _, k2_html = http_call(auth_opener, f"{base_url}/cskh/dashboard", site_name)
+            assert (
+                k2_st == 200
+                and f'src="{b_logo_v2}"' in k2_html
+                and b_logo_v1 not in k2_html
+            ), "Stale logo v1 survived warm SSR cache on /cskh/dashboard"
+    except BaseException as branding_exc:
+        primary_branding_exc = branding_exc
+        if "CRM branding reload failed:" not in str(branding_exc):
+            fallback_detail = logger.scrub(
+                json.dumps(
+                    {
+                        "phase": active_phase,
+                        "reload_index": active_reload_index,
+                        "http_status": None,
+                        "failures": ["branding_smoke_step_error"],
+                        "error": logger.sanitize_error(
+                            f"{type(branding_exc).__name__}: {branding_exc}"
+                        ),
+                        "expected_icon_href": logger.sanitize_url(active_favicon),
+                    },
+                    sort_keys=True,
+                )
+            )
+            logger.assert_clean(fallback_detail)
+            logger.info(f"CRM branding smoke failed before branding reset: {fallback_detail}")
+        raise
+    finally:
+        if primary_branding_exc is None:
+            _smoke_set_branding("", "")
+        else:
+            try:
+                _smoke_set_branding("", "")
+            except Exception as reset_exc:
+                logger.info(
+                    "CRM branding reset in finally failed after primary error: "
+                    + logger.sanitize_error(f"{type(reset_exc).__name__}: {reset_exc}")
+                )
+    kr_st, _, kr_html = http_call(auth_opener, f"{base_url}/cskh/dashboard", site_name)
+    assert (
+        kr_st == 200 and b_logo_v2 not in kr_html and "is-brand-logo" not in kr_html
+    ), "Clearing branding did not restore default CSKH logo"
+    logger.info("HRPARTNER branding prepaint & warm-cache rotation checks passed (v1 -> v2 -> default)")
 
     # 5. Socket.IO EIO=4 HTTP Polling check through proxy -> frontend -> websocket
     _, unauth_sio = make_http_client()
@@ -1375,6 +2627,11 @@ def run_http_and_socketio_smoke(
         f"direct_ns='{redacted_ws_ns}', rfc6455_ping_pong='cskh-p4-ping'"
     )
 
+    # 7. Functional PDF rendering (wkhtmltopdf + WeasyPrint) & RBAC over live HTTP
+    pdf_smoke = run_pdf_functional_and_rbac_smoke(
+        project_name, env_file, http_port, site_name, auth_opener, logger
+    )
+
     return {
         "guest_access": {
             "crm_status": g_crm_code,
@@ -1471,6 +2728,7 @@ def run_http_and_socketio_smoke(
                 ],
             },
         },
+        "pdf_functional_and_rbac_smoke": pdf_smoke,
     }
 
 
@@ -2020,7 +3278,7 @@ def main() -> int:
 
             current_step = "http_and_socketio_smoke"
             smoke_results = run_http_and_socketio_smoke(
-                args.http_port, site_name, adm_pw, logger
+                owned_project_name, env_file, args.http_port, site_name, adm_pw, logger
             )
 
             current_step = "scoped_teardown"

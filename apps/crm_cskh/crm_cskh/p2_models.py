@@ -588,6 +588,8 @@ def ensure_p2_indexes(doctype: str | None = None) -> None:
 			"CSKH Attempt Correction",
 			"CSKH Work Item",
 			"CRM Task",
+			"CRM Lead",
+			"CRM Notification",
 		)
 	)
 	for dt in targets:
@@ -614,6 +616,9 @@ def ensure_p2_indexes(doctype: str | None = None) -> None:
 			frappe.db.add_index(dt, ["campaign", "status", "last_attempt_at"], "cskh_wi_camp_last_idx")
 			if frappe.db.has_column("CSKH Work Item", "owner_at_close"):
 				frappe.db.add_index(dt, ["status", "owner_at_close", "closed_at"], "cskh_wi_owner_close_idx")
+		elif dt == "CRM Lead":
+			if frappe.db.has_column("CRM Lead", "mobile_no"):
+				frappe.db.add_index(dt, ["mobile_no"], "cskh_lead_mobile_no_idx")
 		elif dt == "CRM Task":
 			# Only create indexes once the Custom Fields exist as columns on `tabCRM Task`.
 			if frappe.db.has_column("CRM Task", "cskh_work_item") and frappe.db.has_column(
@@ -633,6 +638,21 @@ def ensure_p2_indexes(doctype: str | None = None) -> None:
 					dt,
 					["cskh_is_followup", "status", "due_date"],
 					"cskh_task_followup_due_idx",
+				)
+		elif dt == "CRM Notification":
+			if frappe.db.has_column(dt, "notification_type_doctype") and frappe.db.has_column(
+				dt, "notification_type_doc"
+			):
+				frappe.db.add_index(
+					dt,
+					["notification_type_doctype", "notification_type_doc", "to_user", "type"],
+					"cskh_notif_type_doc_idx",
+				)
+			if frappe.db.has_column(dt, "reference_doctype") and frappe.db.has_column(dt, "reference_name"):
+				frappe.db.add_index(
+					dt,
+					["reference_doctype", "reference_name", "to_user", "type"],
+					"cskh_notif_ref_doc_idx",
 				)
 
 

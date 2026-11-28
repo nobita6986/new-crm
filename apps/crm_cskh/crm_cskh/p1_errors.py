@@ -95,6 +95,15 @@ def normalize_p1_error_response(response=None, request=None):
 		if _request_targets_file(request):
 			return response
 		status = getattr(response, "status_code", None)
+		if status == 200:
+			# Delegate `/crm` HTML sidebar bridge injection here rather than adding a new
+			# `after_request` module path to `hooks.py` (preserves G09 Tier 3 N->N-1 rollback).
+			path = getattr(request, "path", "") or ""
+			if path == "/crm" or path.startswith("/crm/"):
+				from crm_cskh.cskh_sidebar import inject_crm_sidebar_bridge
+
+				inject_crm_sidebar_bridge(response, request)
+			return response
 		if not isinstance(status, int) or status < 400:
 			return response
 		mimetype = getattr(response, "mimetype", "") or ""

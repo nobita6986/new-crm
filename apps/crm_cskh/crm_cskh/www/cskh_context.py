@@ -14,6 +14,8 @@ contradict the contract, and never *looser*: a deep link to a page the actor
 may not use answers with the permission-denied page instead of a crash.
 """
 
+import json
+import time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -22,6 +24,7 @@ from frappe import _
 
 from crm_cskh import p1_strings, p2_strings, p3_strings
 from crm_cskh.services import errors as p1_errors
+from crm_cskh.services import runtime_cache
 
 ROLE_ADMIN = "CSKH CRM Admin"
 ROLE_BOD = "CSKH BOD Viewer"
@@ -167,48 +170,52 @@ def is_qa_enabled(campaign=None):
 
 
 def roles(user=None):
-	return set(frappe.get_roles(user or frappe.session.user))
+	return set(runtime_cache.get_roles_set(user or frappe.session.user))
 
 
 def is_system(user=None):
 	user = user or frappe.session.user
-	return user == "Administrator" or "System Manager" in roles(user)
+	return user == "Administrator" or "System Manager" in runtime_cache.get_roles_set(user)
 
 
 def is_admin(user=None):
-	return is_system(user) or ROLE_ADMIN in roles(user)
+	user = user or frappe.session.user
+	return is_system(user) or ROLE_ADMIN in runtime_cache.get_roles_set(user)
 
 
 def is_bod(user=None):
-	return is_system(user) or ROLE_BOD in roles(user)
+	user = user or frappe.session.user
+	return is_system(user) or ROLE_BOD in runtime_cache.get_roles_set(user)
 
 
 def is_leader(user=None):
 	user = user or frappe.session.user
 	if is_admin(user):
 		return True
-	return "Sales Manager" in roles(user)
+	return "Sales Manager" in runtime_cache.get_roles_set(user)
 
 
 def is_staff(user=None):
-	return "Sales User" in roles(user)
+	return "Sales User" in runtime_cache.get_roles_set(user or frappe.session.user)
 
 
 def has_role_grant(grants, user=None):
 	"""True when the actor holds one of the business roles of the grant."""
+	user = user or frappe.session.user
 	if is_system(user):
 		return True
-	return bool(roles(user) & set(grants))
+	return bool(runtime_cache.get_roles_set(user) & set(grants))
 
 
 def _visible_keys():
 	"""Navigation keys visible to the actor."""
+	actor_roles = runtime_cache.get_roles_set(frappe.session.user)
 	if is_system():
 		keys = {item["key"] for item in NAV_ITEMS}
 	else:
 		keys = set()
 		for role, allowed in NAV_BY_ROLE.items():
-			if role in roles():
+			if role in actor_roles:
 				keys |= allowed
 	if not is_p3_enabled():
 		keys -= P3_NAV_KEYS
@@ -217,17 +224,7 @@ def _visible_keys():
 
 def _asset_version():
 	"""A cache-busting version of the CSKH static assets."""
-	import os
-
-	folder = os.path.join(os.path.dirname(__file__), "..", "public", "cskh")
-	folder = os.path.normpath(folder)
-	newest = 0
-	if os.path.isdir(folder):
-		for name in os.listdir(folder):
-			path = os.path.join(folder, name)
-			if os.path.isfile(path):
-				newest = max(newest, int(os.path.getmtime(path)))
-	return str(newest)
+	return runtime_cache.get_asset_version()
 
 
 def timezone_context(user=None):
@@ -241,14 +238,17 @@ def timezone_context(user=None):
 	user = user or frappe.session.user
 	site_tz = "Asia/Ho_Chi_Minh"
 	try:
-		site_tz = frappe.utils.get_system_timezone() or site_tz
+		if runtime_cache.is_runtime_db_cache_active():
+			site_tz = runtime_cache.get_cached_system_timezone() or site_tz
+		else:
+			site_tz = frappe.utils.get_system_timezone() or site_tz
 	except Exception:
 		site_tz = "Asia/Ho_Chi_Minh"
 
 	user_tz = ""
 	if user and user != "Guest":
 		try:
-			user_tz = frappe.db.get_value("User", user, "time_zone") or ""
+			user_tz = runtime_cache.get_user_auth_profile(user).get("time_zone") or ""
 		except Exception:
 			user_tz = ""
 
@@ -278,6 +278,52 @@ def timezone_context(user=None):
 	}
 
 
+def _get_or_init_csrf_token() -> str:
+	"""Return the session CSRF token, defending against first-touch concurrent tab updates on tabSessions."""
+	sess_data = getattr(getattr(frappe.local, "session", None), "data", None)
+	csrf_tok = getattr(sess_data, "csrf_token", None) if sess_data is not None else None
+	if csrf_tok:
+		return str(csrf_tok)
+
+	sid = getattr(getattr(frappe, "session", None), "sid", None)
+	for attempt in range(4):
+		try:
+			csrf_tok = frappe.sessions.get_csrf_token()
+			if csrf_tok:
+				return str(csrf_tok)
+		except Exception:
+			frappe.db.rollback()
+			if sid:
+				try:
+					cached = frappe.cache.hget("session", sid)
+					if isinstance(cached, dict):
+						cdata = cached.get("data")
+						if isinstance(cdata, dict) and cdata.get("csrf_token"):
+							csrf_tok = str(cdata["csrf_token"])
+							if sess_data is not None:
+								sess_data.csrf_token = csrf_tok
+							return csrf_tok
+				except Exception:
+					pass
+				try:
+					row = frappe.db.sql(
+						"SELECT sessiondata FROM `tabSessions` WHERE sid = %s LIMIT 1",
+						(sid,),
+					)
+					if row and row[0] and row[0][0]:
+						parsed = json.loads(row[0][0])
+						if isinstance(parsed, dict) and parsed.get("csrf_token"):
+							csrf_tok = str(parsed["csrf_token"])
+							if sess_data is not None:
+								sess_data.csrf_token = csrf_tok
+							return csrf_tok
+				except Exception:
+					frappe.db.rollback()
+			time.sleep(0.02 * (attempt + 1))
+
+	return str(frappe.sessions.get_csrf_token())
+
+
 def build_context(
 	context,
 	route="",
@@ -288,6 +334,7 @@ def build_context(
 	require_p3=False,
 ):
 	"""Common context for every CSKH page."""
+	runtime_cache.install_inprocess_translation_cache()
 	frappe.local.lang = LANGUAGE
 	if frappe.local.form_dict is not None:
 		frappe.local.form_dict.lang = LANGUAGE
@@ -295,7 +342,8 @@ def build_context(
 	if isinstance(getattr(context, "boot", None), dict):
 		context.boot["lang"] = LANGUAGE
 
-	if frappe.session.user == "Guest":
+	actor = frappe.session.user
+	if actor == "Guest":
 		frappe.response["status_code"] = 403
 		frappe.throw(_("Log in to access this page."), frappe.PermissionError)
 
@@ -306,58 +354,90 @@ def build_context(
 			frappe.PermissionError,
 		)
 
-	if require_admin and not is_admin():
+	admin_flag = is_admin(actor)
+	if require_admin and not admin_flag:
 		frappe.response["status_code"] = 403
 		frappe.throw(_("You do not have permission to access this page."), frappe.PermissionError)
 
-	if allowed_roles is not None and not has_role_grant(allowed_roles):
+	if allowed_roles is not None and not has_role_grant(allowed_roles, user=actor):
 		frappe.response["status_code"] = 403
 		frappe.throw(_("You do not have permission to access this page."), frappe.PermissionError)
 
-	visible = _visible_keys()
+	p3_flag = is_p3_enabled()
+	actor_roles = runtime_cache.get_roles_set(actor)
+	sys_flag = actor == "Administrator" or "System Manager" in actor_roles
+	if sys_flag:
+		visible = {item["key"] for item in NAV_ITEMS}
+	else:
+		visible = set()
+		for role, allowed in NAV_BY_ROLE.items():
+			if role in actor_roles:
+				visible |= allowed
+	if not p3_flag:
+		visible -= P3_NAV_KEYS
+
 	nav_items = [item for item in NAV_ITEMS if item["key"] in visible]
 	p3_subnav = [item for item in nav_items if item.get("phase") == "p3"]
 
+	bod_flag = sys_flag or ROLE_BOD in actor_roles
+	leader_flag = admin_flag or ("Sales Manager" in actor_roles)
+	staff_flag = "Sales User" in actor_roles
+
 	leader_root_team = ""
-	if is_leader() and not is_admin() and frappe.session.user and frappe.session.user != "Guest":
+	if leader_flag and not admin_flag and actor and actor != "Guest":
 		try:
-			leader_root_team = (
-				frappe.db.get_value("CRM Sales Hierarchy", {"user": frappe.session.user}, "name") or ""
-			)
+			h_node = runtime_cache.get_user_hierarchy_node(actor)
+			leader_root_team = str(h_node["name"]) if h_node else ""
 		except Exception:
 			leader_root_team = ""
 
+	ui_bundle = runtime_cache.get_static_cskh_ui_bundle(LANGUAGE)
+	branding = runtime_cache.get_website_branding()
+
 	context.no_cache = 1
 	context.title = _(title) if title else _("CSKH")
-	context.csrf_token = frappe.sessions.get_csrf_token()
+	context.splash_image = branding["splash_image"]
+	context.cskh_branding = branding
+	context.csrf_token = _get_or_init_csrf_token()
 	context.cskh_csrf_header = {"X-Frappe-CSRF-Token": context.csrf_token}
-	context.cskh_user = frappe.session.user
+	context.cskh_user = actor
 	context.cskh_route = route
 	context.cskh_page_title = title
 	context.cskh_page_subtitle = subtitle
 	context.cskh_navigation = nav_items
 	context.cskh_p3_subnav = p3_subnav
 	context.cskh_capabilities = {
-		"admin": is_admin(),
-		"bod": is_bod(),
-		"leader": is_leader(),
-		"staff": is_staff(),
+		"admin": admin_flag,
+		"bod": bod_flag,
+		"leader": leader_flag,
+		"staff": staff_flag,
 		"leader_root_team": leader_root_team,
-		"pii": not is_bod() or is_admin(),
-		"can_manage_settings": is_admin(),
-		"can_review_correction": is_admin() or is_leader(),
-		"p3_enabled": is_p3_enabled(),
+		"pii": not bod_flag or admin_flag,
+		"can_manage_settings": admin_flag,
+		"can_review_correction": admin_flag or leader_flag,
+		"p3_enabled": p3_flag,
 		"qa_enabled": is_qa_enabled(),
-		"can_recompute_kpi": is_admin() or is_leader(),
-		"can_waive_sla": is_admin() or is_leader(),
-		"can_export_report": has_role_grant(READ_ROLES),
-		"can_open_crm_app": is_system() or has_role_grant(("Sales Manager", "Sales User")),
+		"can_recompute_kpi": admin_flag or leader_flag,
+		"can_waive_sla": admin_flag or leader_flag,
+		"can_export_report": sys_flag or bool(actor_roles & READ_ROLES),
+		"can_open_crm_app": sys_flag or bool(actor_roles & {"Sales Manager", "Sales User"}),
 	}
-	context.cskh_timezone = timezone_context(frappe.session.user)
-	context.cskh_error_codes = (
-		list(p1_errors.ALL_CODES) + list(p2_strings.P2_ERROR_CODES) + list(p3_strings.P3_ERROR_CODES)
-	)
-	context.cskh_i18n = p1_strings.translated_map()
-	context.cskh_error_texts = p1_strings.translated_error_texts()
-	context.cskh_asset_version = _asset_version()
+	context.cskh_timezone = timezone_context(actor)
+	context.cskh_error_codes = ui_bundle["error_codes"]
+	context.cskh_i18n = ui_bundle["i18n"]
+	context.cskh_error_texts = ui_bundle["error_texts"]
+	context.cskh_error_codes_json = ui_bundle["error_codes_json"]
+	context.cskh_i18n_json = ui_bundle["i18n_json"]
+	context.cskh_error_texts_json = ui_bundle["error_texts_json"]
+	context.cskh_asset_version = ui_bundle["asset_version"]
+	sentinels = getattr(frappe.local, "cskh_ssr_skeleton_sentinels", None)
+	if isinstance(sentinels, dict):
+		context.csrf_token = sentinels["csrf_token"]
+		context.cskh_csrf_header = {"X-Frappe-CSRF-Token": sentinels["csrf_token"]}
+		context.cskh_csrf_header_json = sentinels["csrf_header_json"]
+		context.cskh_timezone_json = sentinels["timezone_json"]
+		if "user_html" in sentinels:
+			context.cskh_user_html = sentinels["user_html"]
+		if "user_json" in sentinels:
+			context.cskh_user_json = sentinels["user_json"]
 	return context

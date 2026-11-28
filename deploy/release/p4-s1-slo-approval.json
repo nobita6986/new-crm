@@ -1,0 +1,16 @@
+{
+  "schema_version": "cskh-p4-s1-slo-approval-v1",
+  "description": "Separate Owner (T0) SLO approval record bound to the immutable submitted threshold specification `deploy/release/p4-s1-slo-spec.json` by exact SHA-256, candidate image digest, and approved resource profile(s). Never edit `deploy/release/p4-s1-slo-spec.json` when recording Owner signoff.",
+  "slo_bundle_id": "cskh-p4-g18-s1-endpoint-slo",
+  "slo_version": "1.0.0",
+  "slo_spec_path": "deploy/release/p4-s1-slo-spec.json",
+  "slo_spec_sha256": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+  "approved_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+  "approved_profiles": [],
+  "approval_status": "PENDING_OWNER_APPROVAL",
+  "owner_signoff": {
+    "approved_by": null,
+    "approved_at_utc": null,
+    "decision_reference": null
+  }
+}

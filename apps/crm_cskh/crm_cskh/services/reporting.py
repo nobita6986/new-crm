@@ -20,6 +20,7 @@ from frappe.utils import get_datetime, now_datetime
 from crm_cskh.api._params import parse_optional_str, parse_pagination
 from crm_cskh.p1_models import OWNED_ACTIVE_WORK_ITEM_STATES
 from crm_cskh.p2_models import ALL_WORK_ITEM_STATES
+from crm_cskh.services import runtime_cache
 from crm_cskh.services.errors import Forbidden, InvalidRequest
 
 ALLOWED_POOL_STATES = {"eligible", "queued", "assigned", "conflict", "revoked", "closed", "invalid"}
@@ -27,33 +28,28 @@ ALLOWED_POOL_STATES = {"eligible", "queued", "assigned", "conflict", "revoked", 
 
 def _is_system(user=None):
 	user = user or frappe.session.user
-	return user == "Administrator" or "System Manager" in frappe.get_roles(user)
+	return user == "Administrator" or "System Manager" in runtime_cache.get_roles_set(user)
 
 
 def _has_role(user, *roles):
-	return bool(set(roles) & set(frappe.get_roles(user)))
+	return bool(set(roles) & runtime_cache.get_roles_set(user))
 
 
 def _scope(user=None):
-	"""Return the scope descriptor of an actor.
-
-	`scope` is one of `system` (whole installation), `all` (read-only whole
-	installation without PII), `team` (the sales hierarchy subtree of the user)
-	or `self` (only the own assignments).
-	"""
+	"""Return the scope descriptor of an actor."""
 	user = user or frappe.session.user
 	if _is_system(user):
 		return {"scope": "system", "users": None, "teams": None, "pii": True}
 	if _has_role(user, "CSKH CRM Admin"):
-		# ADR-P1-07 / L-17: `CSKH CRM Admin` is the business administrator of
-		# CSKH campaigns, pool and distribution without granting `System Manager`.
 		return {"scope": "system", "users": None, "teams": None, "pii": True}
 	if _has_role(user, "CSKH BOD Viewer"):
-		# The BOD sees the aggregated numbers of the whole installation, but
-		# never the PII of a lead (P1 8.1).
 		return {"scope": "all", "users": None, "teams": None, "pii": False}
 	if _has_role(user, "Sales Manager"):
-		manager = frappe.db.get_value("CRM Sales Hierarchy", {"user": user}, ["lft", "rgt"])
+		if runtime_cache.is_runtime_db_cache_active():
+			node = runtime_cache.get_user_hierarchy_node(user)
+			manager = (node["lft"], node["rgt"]) if node else None
+		else:
+			manager = frappe.db.get_value("CRM Sales Hierarchy", {"user": user}, ["lft", "rgt"])
 		if manager:
 			return {"scope": "team", "user": user, "manager": manager, "pii": True}
 		return {"scope": "self", "user": user, "pii": True}
@@ -61,6 +57,8 @@ def _scope(user=None):
 
 
 def _team_users(user):
+	if runtime_cache.is_runtime_db_cache_active():
+		return list(runtime_cache.get_subtree_users_from_cache(user))
 	manager = frappe.db.get_value("CRM Sales Hierarchy", {"user": user}, ["lft", "rgt"])
 	if not manager:
 		return [user]
@@ -74,13 +72,12 @@ def _team_users(user):
 
 
 def _team_nodes(user):
-	"""The names of the `CRM Sales Hierarchy` nodes of the user's subtree.
-
-	`CSKH Campaign.team_scope` holds the **name of a hierarchy node**, not a
-	user. Comparing it with the user emails never matches, so a leader would
-	see neither their own campaigns nor the campaigns of their subtree
-	(L-07).
-	"""
+	"""The names of the `CRM Sales Hierarchy` nodes of the user's subtree."""
+	if runtime_cache.is_runtime_db_cache_active():
+		node = runtime_cache.get_user_hierarchy_node(user)
+		if not node:
+			return []
+		return list(runtime_cache.get_subtree_nodes_from_cache(node["name"]))
 	manager = frappe.db.get_value("CRM Sales Hierarchy", {"user": user}, ["lft", "rgt"])
 	if not manager:
 		return []
@@ -256,7 +253,16 @@ def my_list(user=None, page=1, page_size=20, status=None, campaign=None, search=
 	now = now_datetime()
 	from_sql, where_sql, params = _my_list_where(user, status_val, campaign_val, search_val)
 
-	total = int(frappe.db.sql(f"select count(*) {from_sql} where {where_sql}", tuple(params))[0][0] or 0)
+	if not search_val:
+		total = int(
+			frappe.db.sql(
+				f"select count(*) from `tabCSKH Work Item` wi where {where_sql}",
+				tuple(params),
+			)[0][0]
+			or 0
+		)
+	else:
+		total = int(frappe.db.sql(f"select count(*) {from_sql} where {where_sql}", tuple(params))[0][0] or 0)
 	if total == 0:
 		return {
 			"scope": "self",
@@ -267,36 +273,85 @@ def my_list(user=None, page=1, page_size=20, status=None, campaign=None, search=
 			"as_of": now,
 		}
 
-	has_dnc = frappe.db.has_column("CRM Lead", "cskh_do_not_contact")
+	has_dnc = runtime_cache.has_column("CRM Lead", "cskh_do_not_contact")
 	dnc_col = "coalesce(l.cskh_do_not_contact, 0) as do_not_contact" if has_dnc else "0 as do_not_contact"
+	use_camp_cache = runtime_cache.is_runtime_db_cache_active()
+	if use_camp_cache:
+		camp_map = runtime_cache.get_campaign_map()
+		camp_cols_sql = "null as campaign_title, null as campaign_code,"
+	else:
+		camp_map = {}
+		camp_cols_sql = "c.title as campaign_title, c.code as campaign_code,"
 
-	rows = frappe.db.sql(
-		f"select wi.name as work_item, wi.lead as lead, wi.campaign as campaign, "
-		f"wi.status as status, coalesce(wi.revision, 1) as revision, wi.assigned_at as assigned_at, "
-		f"coalesce(wi.attempt_count, 0) as attempt_count, "
-		f"coalesce(wi.connected_attempt_count, 0) as connected_attempt_count, "
-		f"wi.first_attempt_at as first_attempt_at, wi.last_attempt_at as last_attempt_at, "
-		f"wi.last_outcome_code as last_outcome_code, wi.last_outcome_label as last_outcome_label, "
-		f"wi.last_connected_at as last_connected_at, "
-		f"wi.open_callback_task as open_callback_task, wi.next_action_due as next_action_due, "
-		f"c.title as campaign_title, c.code as campaign_code, "
-		f"l.lead_name as lead_name, l.first_name as first_name, "
-		f"l.mobile_no as mobile_no, l.source as source, l.status as lead_status, {dnc_col} "
-		f"{from_sql} where {where_sql} "
-		f"order by case when wi.next_action_due is not null and wi.next_action_due < %s then 0 else 1 end asc, "
-		f"wi.assigned_at desc, wi.name desc limit %s offset %s",
-		(*tuple(params), now, limit, offset),
-		as_dict=True,
-	)
+	if use_camp_cache and not search_val:
+		# Deferred join: sort & paginate narrow `tabCSKH Work Item` rows first so `tabCRM Lead`
+		# is probed by PK for at most `limit` (`20`) rows instead of ~1,100 rows per staff user.
+		_, where_sql_p, params_p = _my_list_where(user, status_val, campaign_val, None, wi_alias="wi_p")
+		rows = frappe.db.sql(
+			f"select wi.name as work_item, wi.lead as lead, wi.campaign as campaign, "
+			f"wi.status as status, coalesce(wi.revision, 1) as revision, wi.assigned_at as assigned_at, "
+			f"coalesce(wi.attempt_count, 0) as attempt_count, "
+			f"coalesce(wi.connected_attempt_count, 0) as connected_attempt_count, "
+			f"wi.first_attempt_at as first_attempt_at, wi.last_attempt_at as last_attempt_at, "
+			f"wi.last_outcome_code as last_outcome_code, wi.last_outcome_label as last_outcome_label, "
+			f"wi.last_connected_at as last_connected_at, "
+			f"wi.open_callback_task as open_callback_task, wi.next_action_due as next_action_due, "
+			f"{camp_cols_sql} "
+			f"l.lead_name as lead_name, l.first_name as first_name, "
+			f"l.mobile_no as mobile_no, l.source as source, l.status as lead_status, {dnc_col} "
+			f"from ("
+			f"select wi_p.name from `tabCSKH Work Item` wi_p where {where_sql_p} "
+			f"order by case when wi_p.next_action_due is not null and wi_p.next_action_due < %s then 0 else 1 end asc, "
+			f"wi_p.assigned_at desc, wi_p.name desc limit %s offset %s"
+			f") page_wi "
+			f"inner join `tabCSKH Work Item` wi on wi.name = page_wi.name "
+			f"inner join `tabCRM Lead` l on l.name = wi.lead "
+			f"order by case when wi.next_action_due is not null and wi.next_action_due < %s then 0 else 1 end asc, "
+			f"wi.assigned_at desc, wi.name desc",
+			(*tuple(params_p), now, limit, offset, now),
+			as_dict=True,
+		)
+	else:
+		page_from_sql = (
+			"from `tabCSKH Work Item` wi inner join `tabCRM Lead` l on l.name = wi.lead"
+			if use_camp_cache
+			else from_sql
+		)
+		rows = frappe.db.sql(
+			f"select wi.name as work_item, wi.lead as lead, wi.campaign as campaign, "
+			f"wi.status as status, coalesce(wi.revision, 1) as revision, wi.assigned_at as assigned_at, "
+			f"coalesce(wi.attempt_count, 0) as attempt_count, "
+			f"coalesce(wi.connected_attempt_count, 0) as connected_attempt_count, "
+			f"wi.first_attempt_at as first_attempt_at, wi.last_attempt_at as last_attempt_at, "
+			f"wi.last_outcome_code as last_outcome_code, wi.last_outcome_label as last_outcome_label, "
+			f"wi.last_connected_at as last_connected_at, "
+			f"wi.open_callback_task as open_callback_task, wi.next_action_due as next_action_due, "
+			f"{camp_cols_sql} "
+			f"l.lead_name as lead_name, l.first_name as first_name, "
+			f"l.mobile_no as mobile_no, l.source as source, l.status as lead_status, {dnc_col} "
+			f"{page_from_sql} where {where_sql} "
+			f"order by case when wi.next_action_due is not null and wi.next_action_due < %s then 0 else 1 end asc, "
+			f"wi.assigned_at desc, wi.name desc limit %s offset %s",
+			(*tuple(params), now, limit, offset),
+			as_dict=True,
+		)
 
+	now_dt = get_datetime(now)
 	items = []
 	for row in rows:
 		is_overdue = False
 		if row.status == "on_hold" and row.next_action_due:
 			try:
-				is_overdue = get_datetime(row.next_action_due) < get_datetime(now)
+				is_overdue = get_datetime(row.next_action_due) < now_dt
 			except Exception:
 				is_overdue = False
+		if use_camp_cache and row.campaign:
+			c_info = camp_map.get(str(row.campaign)) or {}
+			camp_title = c_info.get("title")
+			camp_code = c_info.get("code")
+		else:
+			camp_title = row.campaign_title
+			camp_code = row.campaign_code
 		items.append(
 			{
 				"work_item": row.work_item,
@@ -304,8 +359,8 @@ def my_list(user=None, page=1, page_size=20, status=None, campaign=None, search=
 				"display_name": row.lead_name or row.first_name or "",
 				"phone": row.mobile_no,
 				"campaign": row.campaign,
-				"campaign_title": row.campaign_title,
-				"campaign_code": row.campaign_code,
+				"campaign_title": camp_title,
+				"campaign_code": camp_code,
 				"source": row.source,
 				"lead_status": row.lead_status,
 				"work_item_status": row.status,
@@ -336,21 +391,21 @@ def my_list(user=None, page=1, page_size=20, status=None, campaign=None, search=
 	}
 
 
-def _my_list_where(user, status_val, campaign_val, search_val):
+def _my_list_where(user, status_val, campaign_val, search_val, *, wi_alias: str = "wi"):
 	from_sql = (
-		"from `tabCSKH Work Item` wi "
-		"inner join `tabCRM Lead` l on l.name = wi.lead "
-		"left join `tabCSKH Campaign` c on c.name = wi.campaign"
+		f"from `tabCSKH Work Item` {wi_alias} "
+		f"inner join `tabCRM Lead` l on l.name = {wi_alias}.lead "
+		f"left join `tabCSKH Campaign` c on c.name = {wi_alias}.campaign"
 	)
-	clauses = ["wi.assigned_to = %s"]
+	clauses = [f"{wi_alias}.assigned_to = %s"]
 	params = [user]
 	if status_val:
-		clauses.append("wi.status = %s")
+		clauses.append(f"{wi_alias}.status = %s")
 		params.append(status_val)
 	else:
-		clauses.append("wi.status in ('assigned', 'in_progress', 'on_hold')")
+		clauses.append(f"{wi_alias}.status in ('assigned', 'in_progress', 'on_hold')")
 	if campaign_val:
-		clauses.append("wi.campaign = %s")
+		clauses.append(f"{wi_alias}.campaign = %s")
 		params.append(campaign_val)
 	if search_val:
 		like = f"%{search_val}%"

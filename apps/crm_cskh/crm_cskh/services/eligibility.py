@@ -164,14 +164,23 @@ def eligible_leads(campaign, limit=None):
 
 	eligible = []
 	excluded = []
-	for lead in leads:
-		reason = _lead_exclusion_reason(campaign, lead)
-		if reason:
-			excluded.append({"lead": lead, "reason": reason})
-		else:
-			eligible.append(lead)
-		if limit and len(eligible) >= limit:
-			break
+	if len(leads) > 50 and not limit:
+		reason_map = _bulk_lead_exclusion_reasons(campaign, leads)
+		for lead in leads:
+			reason = reason_map.get(lead)
+			if reason:
+				excluded.append({"lead": lead, "reason": reason})
+			else:
+				eligible.append(lead)
+	else:
+		for lead in leads:
+			reason = _lead_exclusion_reason(campaign, lead)
+			if reason:
+				excluded.append({"lead": lead, "reason": reason})
+			else:
+				eligible.append(lead)
+			if limit and len(eligible) >= limit:
+				break
 
 	return {
 		"eligible": eligible,
@@ -270,3 +279,88 @@ def _lead_exclusion_reason(campaign, lead):
 	):
 		return REASON_ACTIVE_CLAIM
 	return None
+
+
+def _bulk_lead_exclusion_reasons(campaign, leads):
+	"""Bulk-SQL evaluation matching `_lead_exclusion_reason` priority order without N+1 queries."""
+	uniq = sorted({ld for ld in leads if ld})
+	if not uniq:
+		return {}
+
+	has_identity = set()
+	dnc_leads = set()
+	in_camp_leads = set()
+	claims_by_lead = {}
+	active_other_leads = set()
+	has_dnc_col = frappe.db.has_column("CRM Lead", "cskh_do_not_contact")
+
+	for idx in range(0, len(uniq), 2000):
+		chunk = uniq[idx : idx + 2000]
+		ph = ", ".join(["%s"] * len(chunk))
+		params = tuple(chunk)
+
+		has_identity.update(
+			frappe.db.sql(
+				f"select canonical_lead from `tabCSKH Identity Index` where canonical_lead in ({ph})",
+				params,
+				pluck=True,
+			)
+			or ()
+		)
+		if has_dnc_col:
+			dnc_leads.update(
+				frappe.db.sql(
+					f"select name from `tabCRM Lead` where name in ({ph}) and coalesce(cskh_do_not_contact, 0) != 0",
+					params,
+					pluck=True,
+				)
+				or ()
+			)
+		in_camp_leads.update(
+			frappe.db.sql(
+				f"select distinct lead from `tabCSKH Work Item` where campaign = %s and lead in ({ph})",
+				(campaign, *chunk),
+				pluck=True,
+			)
+			or ()
+		)
+		for row in frappe.db.sql(
+			f"""select ac.lead, ac.campaign, wi.status as wi_status
+			    from `tabCSKH Active Claim` ac
+			    left join `tabCSKH Work Item` wi on wi.name = ac.work_item
+			    where ac.lead in ({ph})""",
+			params,
+			as_dict=True,
+		):
+			claims_by_lead[row.lead] = (row.campaign, row.wi_status)
+
+		owned_ph = ", ".join(["%s"] * len(OWNED_ACTIVE_WORK_ITEM_STATES))
+		active_other_leads.update(
+			frappe.db.sql(
+				f"""select distinct lead from `tabCSKH Work Item`
+				    where lead in ({ph}) and campaign != %s and status in ({owned_ph})""",
+				(*chunk, campaign, *OWNED_ACTIVE_WORK_ITEM_STATES),
+				pluck=True,
+			)
+			or ()
+		)
+
+	out = {}
+	for lead in uniq:
+		if lead not in has_identity:
+			out[lead] = REASON_NO_IDENTITY
+		elif lead in dnc_leads:
+			out[lead] = REASON_DO_NOT_CONTACT
+		elif lead in in_camp_leads:
+			out[lead] = REASON_WORK_ITEM_EXISTS
+		elif lead in claims_by_lead:
+			c_camp, wi_st = claims_by_lead[lead]
+			if c_camp != campaign:
+				out[lead] = REASON_ACTIVE_CLAIM
+			elif wi_st not in ACTIVE_WORK_ITEM_STATES:
+				out[lead] = REASON_WORK_ITEM_EXISTS
+			elif lead in active_other_leads:
+				out[lead] = REASON_ACTIVE_CLAIM
+		elif lead in active_other_leads:
+			out[lead] = REASON_ACTIVE_CLAIM
+	return out

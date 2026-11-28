@@ -18,11 +18,18 @@ def _is_reporting_enabled() -> bool:
 	return bool(is_p3_reporting_enabled())
 
 
-def drain_dirty_kpi_scopes(max_scopes: int = 100) -> dict:
+def drain_dirty_kpi_scopes(
+	max_scopes: int = 100,
+	*,
+	defer_unmaterialized_large_rollups: bool = True,
+) -> dict:
 	"""Cron entry point (`*/5 * * * *`) draining pending `CSKH Dirty Scope` records."""
 	if not _is_reporting_enabled():
 		return {"processed_scopes": 0, "runs": [], "skipped": True, "reason": "p3_reporting_disabled"}
-	return process_dirty_scopes(max_scopes=max_scopes)
+	return process_dirty_scopes(
+		max_scopes=max_scopes,
+		defer_unmaterialized_large_rollups=defer_unmaterialized_large_rollups,
+	)
 
 
 def run_single_period_recompute(

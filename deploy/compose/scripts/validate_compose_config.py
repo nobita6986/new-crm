@@ -112,6 +112,23 @@ STACK_PROFILES = {
             ("127.0.0.1", "18080", 80, "tcp"),
         ],
     },
+    "staging-dr-https": {
+        "env_template": ENV_DIR / "staging-dr-https.env.example",
+        "compose_files": [
+            UPSTREAM_DIR / "compose.yaml",
+            UPSTREAM_DIR / "overrides" / "compose.mariadb.yaml",
+            UPSTREAM_DIR / "overrides" / "compose.mariadb-secrets.yaml",
+            UPSTREAM_DIR / "overrides" / "compose.redis.yaml",
+            UPSTREAM_DIR / "overrides" / "compose.https.yaml",
+            UPSTREAM_DIR / "overrides" / "compose.migrator.yaml",
+            OVERRIDES_DIR / "compose.cskh-common.yaml",
+            OVERRIDES_DIR / "compose.cskh-dr-https.yaml",
+        ],
+        "expected_ports": [
+            ("127.0.0.1", "18081", 80, "tcp"),
+            ("127.0.0.1", "18443", 443, "tcp"),
+        ],
+    },
 }
 
 
@@ -197,7 +214,10 @@ def verify_env_template(
 
     for img_key in ("APP_IMAGE", "MARIADB_IMAGE", "REDIS_IMAGE", "PROXY_IMAGE"):
         val = env_map.get(img_key, "")
-        allow_local_id = img_key == "APP_IMAGE" and stack_name == "isolated-smoke"
+        allow_local_id = img_key == "APP_IMAGE" and stack_name in (
+            "isolated-smoke",
+            "staging-dr-https",
+        )
         pattern = LOCAL_OR_REMOTE_IMMUTABLE_RE if allow_local_id else REMOTE_DIGEST_RE
         assert pattern.match(val), (
             f"{stack_name}: {img_key}='{val}' must be pinned by immutable sha256 digest"
@@ -280,7 +300,11 @@ def validate_stack(
     published_ports: dict[str, list[tuple[str, str, int, str]]] = {}
     for sname, sdef in srvs.items():
         img = sdef.get("image", "")
-        img_re = LOCAL_OR_REMOTE_IMMUTABLE_RE if stack_name == "isolated-smoke" else REMOTE_DIGEST_RE
+        img_re = (
+            LOCAL_OR_REMOTE_IMMUTABLE_RE
+            if stack_name in ("isolated-smoke", "staging-dr-https")
+            else REMOTE_DIGEST_RE
+        )
         assert img_re.match(img), f"{stack_name}.{sname}: image '{img}' lacks immutable sha256 digest"
 
         s_nets = set(sdef.get("networks", {}).keys())
@@ -337,6 +361,46 @@ def validate_stack(
     assert not srvs["proxy"].get("userns_mode"), f"{stack_name}.proxy must not force userns_mode"
     assert srvs["frontend"]["environment"]["FRAPPE_SITE_NAME_HEADER"] == env_map["SITE_NAME"]
 
+    # Traefik multi-stack isolation guard (`Ops 7bcf0ce`):
+    # 1) proxy MUST restrict Docker provider discovery to exact COMPOSE_PROJECT_NAME.
+    # 2) frontend Traefik routers/services/middlewares MUST be project-scoped (`<project_name>-*`).
+    proxy_cmd_args = srvs["proxy"].get("command") or []
+    expected_constraint = (
+        f"--providers.docker.constraints=Label(`com.docker.compose.project`,`{project_name}`)"
+    )
+    assert expected_constraint in proxy_cmd_args, (
+        f"{stack_name}.proxy missing Compose project provider constraint '{expected_constraint}'; got {proxy_cmd_args}"
+    )
+    fe_labels = srvs["frontend"].get("labels") or {}
+    assert fe_labels.get("traefik.docker.network") == f"{project_name}_edge_net", (
+        f"{stack_name}.frontend wrong traefik.docker.network: {fe_labels.get('traefik.docker.network')}"
+    )
+    traefik_service_names: set[str] = set()
+    traefik_router_services: dict[str, str] = {}
+    for lk, lv in fe_labels.items():
+        parts = lk.split(".")
+        if (
+            len(parts) >= 4
+            and parts[:2] == ["traefik", "http"]
+            and parts[2] in ("services", "routers", "middlewares")
+        ):
+            entity_kind, entity_name = parts[2], parts[3]
+            assert entity_name.startswith(f"{project_name}-"), (
+                f"{stack_name}.frontend unprefixed Traefik {entity_kind} '{entity_name}' in label '{lk}'"
+            )
+            if entity_kind == "services":
+                traefik_service_names.add(entity_name)
+            elif entity_kind == "routers" and parts[4:] == ["service"]:
+                traefik_router_services[entity_name] = str(lv)
+    assert traefik_service_names == {f"{project_name}-frontend"}, (
+        f"{stack_name}.frontend expected sole Traefik service '{project_name}-frontend', got {traefik_service_names}"
+    )
+    assert traefik_router_services and all(
+        target == f"{project_name}-frontend" for target in traefik_router_services.values()
+    ), (
+        f"{stack_name}.frontend router->service mapping mismatch: {traefik_router_services}"
+    )
+
     # F-P4-03: Named project-scoped `logs` + `sites` volumes on all 8 app services
     vols_def = rendered.get("volumes") or {}
     expected_vol_keys = (
@@ -385,7 +449,9 @@ def validate_stack(
         "bench set-config -g redis_queue",
         "bench set-config -g redis_socketio",
         "bench set-config -gp socketio_port",
+        "if [ -x /usr/lib/chromium/chromium-headless-shell ]; then",
         "bench set-config -g chromium_path /usr/lib/chromium/chromium-headless-shell",
+        'd.pop("chromium_path", None)',
     ):
         assert required_cfg_step in cfg_cmd, (
             f"{stack_name}.configurator missing required step '{required_cfg_step}'"
@@ -487,6 +553,13 @@ def verify_negative_fail_closed(tmp_dir: pathlib.Path) -> None:
     write_env_file(f4_smoke, smoke_env)
     verify_env_template("isolated-smoke", f4_smoke, require_real_app_digest=True)
 
+    dr_env = parse_env_file(STACK_PROFILES["staging-dr-https"]["env_template"])
+    dr_env["APP_IMAGE"] = sample_local_id
+    dr_env["PULL_POLICY"] = "never"
+    f4_dr = tmp_dir / "dr_local_id.env"
+    write_env_file(f4_dr, dr_env)
+    verify_env_template("staging-dr-https", f4_dr, require_real_app_digest=True)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -512,8 +585,14 @@ def main() -> int:
             )
         verify_negative_fail_closed(tmp_dir)
 
-    # Verify pairwise disjoint isolation across all environments + Owner DEV stacks
-    reserved_owner_projects = {"crm-cskh-dev", "crm-cskh-p1", "crm-cskh-p2", "crm-cskh-p3-ui"}
+    # Verify pairwise disjoint isolation across all environments + Owner DEV/VPS stacks
+    reserved_owner_projects = {
+        "crm-cskh-dev",
+        "crm-cskh-p1",
+        "crm-cskh-p2",
+        "crm-cskh-p3-ui",
+        "crm-cskh-vps-staging",
+    }
     seen_projects: set[str] = set()
     seen_sites: set[str] = set()
     seen_networks: set[str] = set()
@@ -527,7 +606,12 @@ def main() -> int:
         seen_projects.add(proj)
 
         site = info["site_name"]
-        assert site not in {"dev.localhost", "p3ui.localhost"}, f"{sname} collides with Owner site"
+        assert site not in {
+            "dev.localhost",
+            "p3ui.localhost",
+            "crm-staging.localhost",
+            "crm.hrpartner.vn",
+        }, f"{sname} collides with Owner site"
         assert site not in seen_sites, f"Duplicate site name: {site}"
         seen_sites.add(site)
 

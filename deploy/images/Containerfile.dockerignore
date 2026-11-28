@@ -14,6 +14,7 @@ apps/crm_cskh/.ruff_cache/
 
 !deploy/
 !deploy/dev/
+!deploy/dev/apply-crm-branding-patch.py
 !deploy/dev/apply-crm-ui-vi-patch.py
 !deploy/dev/apply-frappe-vi-patch.py
 !deploy/images/
