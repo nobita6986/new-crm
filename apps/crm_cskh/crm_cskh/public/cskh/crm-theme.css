@@ -268,3 +268,73 @@ body [role="listbox"] {
 	border-radius: 12px !important;
 	border-color: #e2e8f0 !important;
 }
+
+/* Worker-care sales block enforcement (overrides Tailwind .flex/.grid utilities on [hidden]) */
+[data-cskh-sales-blocked="1"],
+[data-cskh-group-hidden="1"],
+#app [role="tablist"][hidden],
+#app [role="tabpanel"][hidden] {
+	display: none !important;
+	pointer-events: none !important;
+}
+
+/* Worker-care helper panel replacing Contact single-tab Deals pane */
+.cskh-contact-care-panel {
+	margin: 24px;
+	padding: 24px;
+	border-radius: 14px;
+	border: 1px solid #e2e8f0;
+	background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 6px 16px -4px rgba(15, 23, 42, 0.05);
+	max-width: 560px;
+}
+
+.cskh-contact-care-title {
+	margin: 0 0 8px;
+	font-size: 16px;
+	font-weight: 600;
+	color: #0f172a;
+}
+
+.cskh-contact-care-desc {
+	margin: 0 0 16px;
+	font-size: 14px;
+	line-height: 1.6;
+	color: #475569;
+}
+
+.cskh-contact-care-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.cskh-contact-care-btn {
+	display: inline-flex;
+	align-items: center;
+	min-height: 36px;
+	padding: 6px 14px;
+	border-radius: 9px;
+	border: 1px solid #cbd5e1;
+	background: #ffffff;
+	color: #334155;
+	font-size: 13px;
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.cskh-contact-care-btn:hover {
+	background: #f8fafc;
+	color: #0f172a;
+}
+
+.cskh-contact-care-btn.is-primary {
+	border-color: #4338ca;
+	background: #4f46e5;
+	color: #ffffff;
+}
+
+.cskh-contact-care-btn.is-primary:hover {
+	background: #4338ca;
+	color: #ffffff;
+}

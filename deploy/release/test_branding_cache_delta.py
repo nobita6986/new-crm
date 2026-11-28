@@ -690,8 +690,10 @@ class BrandingSmokeDiagnosticsTests(unittest.TestCase):
             f'Asia/Ho_Chi_Minh Tổng quan Chất lượng "X-Frappe-CSRF-Token": "{csrf}"'
         )
         resets = []
+        branding_started = False
 
         def http(opener, url, site, method="GET", data=None, headers=None):
+            nonlocal branding_started
             path = self.smoke.urllib.parse.urlsplit(url).path
             if opener is guest:
                 return 403, {}, ""
@@ -700,7 +702,7 @@ class BrandingSmokeDiagnosticsTests(unittest.TestCase):
             if path.startswith("/cskh/"):
                 return 200, {}, shell
             if path == "/crm":
-                return 200, {}, 'data-cskh-crm-theme="1" crm-sidebar-bridge.js'
+                return 302, {"location": "/cskh"}, ""
             if path == "/api/method/crm_cskh.api.p3_reporting.request_recompute":
                 return 400, {}, ""
             if path == "/api/method/crm_cskh.api.health.ping":
@@ -708,10 +710,15 @@ class BrandingSmokeDiagnosticsTests(unittest.TestCase):
                     return 400, {}, ""
                 return 200, {}, '{"message":{"app":"crm_cskh"}}'
             if path == "/api/method/frappe.client.set_value":
-                if json.loads(data)["fieldname"]["favicon"] == "":
+                fav_val = json.loads(data)["fieldname"]["favicon"]
+                if fav_val == "":
                     resets.append(logger.render())
+                else:
+                    branding_started = True
                 return 200, {}, "{}"
             if path == "/crm/leads":
+                if not branding_started:
+                    return 200, {}, 'data-cskh-crm-theme="1" crm-sidebar-bridge.js'
                 return (
                     503,
                     {},
@@ -777,6 +784,8 @@ class BrandingSmokeDiagnosticsTests(unittest.TestCase):
             if path.startswith("/cskh/"):
                 return 200, {}, shell
             if path == "/crm":
+                return 302, {"location": "/cskh"}, ""
+            if path == "/crm/leads":
                 return 200, {}, 'data-cskh-crm-theme="1" crm-sidebar-bridge.js'
             if path == "/api/method/crm_cskh.api.p3_reporting.request_recompute":
                 return 400, {}, ""
@@ -900,7 +909,7 @@ class BrandingSmokeDiagnosticsTests(unittest.TestCase):
                     )
                 return 200, {}, shell_base
             if path == "/crm":
-                return 200, {}, 'data-cskh-crm-theme="1" crm-sidebar-bridge.js'
+                return 302, {"location": "/cskh"}, ""
             if path == "/api/method/crm_cskh.api.p3_reporting.request_recompute":
                 return 400, {}, ""
             if path == "/api/method/crm_cskh.api.health.ping":
@@ -921,6 +930,8 @@ class BrandingSmokeDiagnosticsTests(unittest.TestCase):
                     phase_state["reset_snapshots"].append(logger.render())
                     return 503, {}, f"upstream down pwd={admin_pw} sid={sid}"
             if path == "/crm/leads":
+                if phase_state["current"] == "init":
+                    return 200, {}, 'data-cskh-crm-theme="1" crm-sidebar-bridge.js'
                 if phase_state["current"] == "v1":
                     return (
                         200,

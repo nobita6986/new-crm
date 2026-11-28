@@ -1,5 +1,5 @@
 app_name = "crm_cskh"
-app_title = "CRM CSKH"
+app_title = "Worker care"
 app_publisher = "CRM-CSKH Project"
 app_description = "CRM CSKH custom app (P0 scaffold)"
 app_email = "noreply@example.com"
@@ -96,7 +96,7 @@ add_to_apps_screen = [
 	{
 		"name": "crm_cskh",
 		"logo": "/assets/crm_cskh/cskh/logo.svg",
-		"title": "CSKH",
+		"title": "Worker care",
 		"route": "/cskh",
 		"has_permission": "crm_cskh.cskh_sidebar.has_app_permission",
 	}
@@ -144,6 +144,13 @@ web_include_css = "/assets/crm_cskh/cskh/web-theme.css"
 # role_home_page = {
 # 	"Role": "home_page"
 # }
+role_home_page = {
+	"Sales User": "cskh",
+	"Sales Manager": "cskh",
+	"CSKH CRM Admin": "cskh",
+	"CSKH BOD Viewer": "cskh",
+	"System Manager": "cskh",
+}
 
 # Generators
 # ----------

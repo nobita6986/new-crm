@@ -546,8 +546,26 @@ def _load_p3_strings():
 		return mod
 
 
+def _load_worker_strings(module_name):
+	import importlib
+
+	try:
+		return importlib.import_module(f"crm_cskh.{module_name}")
+	except ImportError:
+		import importlib.util
+		from pathlib import Path
+
+		path = Path(__file__).with_name(f"{module_name}.py")
+		spec = importlib.util.spec_from_file_location(f"crm_cskh_{module_name}", path)
+		mod = importlib.util.module_from_spec(spec)
+		spec.loader.exec_module(mod)
+		return mod
+
+
 _p2 = _load_p2_strings()
 _p3 = _load_p3_strings()
+_worker_care = _load_worker_strings("worker_care_strings")
+_worker_overview = _load_worker_strings("worker_overview_strings")
 ERROR_EXPLANATIONS.update(_p2.P2_ERROR_EXPLANATIONS)
 ERROR_EXPLANATIONS.update(_p3.P3_ERROR_EXPLANATIONS)
 
@@ -567,6 +585,8 @@ ALL_STRINGS = (
 	+ BACKEND_MESSAGES
 	+ _p2.ALL_P2_STRINGS
 	+ _p3.ALL_P3_STRINGS
+	+ _worker_care.STRINGS
+	+ _worker_overview.STRINGS
 )
 
 

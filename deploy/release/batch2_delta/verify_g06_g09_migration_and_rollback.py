@@ -779,7 +779,8 @@ def run_live_rehearsal(
         st_n_apps_admin, _, body_n_apps_admin = admin.get_json(
             "/api/method/frappe.apps.get_apps"
         )
-        st_n_crm_html, _, raw_n_crm_html = staff_a.raw_request("GET", "/crm")
+        st_n_crm_root, n_crm_root_hdrs, _ = staff_a.raw_request("GET", "/crm")
+        st_n_crm_html, _, raw_n_crm_html = staff_a.raw_request("GET", "/crm/leads")
         n_apps_staff_names = [
             str(a.get("name"))
             for a in (unwrap_message(body_n_apps_staff) or [])
@@ -837,10 +838,14 @@ def run_live_rehearsal(
             n_apps_admin_names,
         )
         assert (
-            st_n_crm_html == 200
+            st_n_crm_root == 302
+            and n_crm_root_hdrs.get("location") == "/cskh"
+            and st_n_crm_html == 200
             and n_crm_has_bridge is True
             and n_crm_has_theme is True
         ), (
+            st_n_crm_root,
+            n_crm_root_hdrs.get("location"),
             st_n_crm_html,
             n_crm_has_bridge,
             n_crm_has_theme,
@@ -911,6 +916,12 @@ def run_live_rehearsal(
             t3_crm_has_bridge,
             t3_crm_has_theme,
         )
+
+        # Also verify a brand-new `POST /api/method/login` session on rolled-back `N-1` (where DB holds
+        # `default_app = 'crm_cskh'`) never 403s or loops, landing cleanly on a 200 OK route (`/app`).
+        fresh_t3_staff = stack.make_actor("staff_a_t3_fresh", "staff.a@dev.local")
+        st_t3_app, _, _ = fresh_t3_staff.raw_request("GET", "/app")
+        assert st_t3_app == 200, st_t3_app
 
         # Inspect `N-1` hooks, orphan-hook resolution, real `N-1` RQ worker execution & data reconciliation
         # WITHOUT running any second post-traffic `clear_cache()` (`F-G09-HOOK-01` + `F-TRIAL-HOOK-RB-01`)

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from collections.abc import Iterable, Mapping
 import datetime as dt
 import hashlib
 import http.cookiejar
@@ -674,6 +675,90 @@ def make_http_client() -> tuple[http.cookiejar.CookieJar, urllib.request.OpenerD
     return jar, opener
 
 
+class CaseInsensitiveHeaders(dict[str, str]):
+    """HTTP response header map with RFC 9110 §5.1 case-insensitive field lookup."""
+
+    def __init__(
+        self,
+        initial: Mapping[str, str] | Iterable[tuple[str, str]] | None = None,
+    ) -> None:
+        super().__init__()
+        if initial is not None:
+            self.update(initial)
+
+    def __setitem__(self, key: str, value: str) -> None:
+        super().__setitem__(str(key).lower(), value)
+
+    def __getitem__(self, key: str) -> str:
+        return super().__getitem__(str(key).lower())
+
+    def __delitem__(self, key: str) -> None:
+        super().__delitem__(str(key).lower())
+
+    def __contains__(self, key: object) -> bool:
+        return isinstance(key, str) and super().__contains__(key.lower())
+
+    def get(self, key: str, default: str | None = None) -> str | None:  # type: ignore[override]
+        return super().get(str(key).lower(), default)
+
+    def pop(self, key: str, *args: object) -> object:
+        return super().pop(str(key).lower(), *args)
+
+    def setdefault(self, key: str, default: str = "") -> str:
+        return super().setdefault(str(key).lower(), default)
+
+    def update(  # type: ignore[override]
+        self,
+        other: Mapping[str, str] | Iterable[tuple[str, str]] = (),
+        /,
+        **kwargs: str,
+    ) -> None:
+        items = other.items() if isinstance(other, Mapping) else other
+        for k, v in items:
+            self[str(k)] = v
+        for k, v in kwargs.items():
+            self[str(k)] = v
+
+
+def normalize_response_headers(raw_headers: object) -> CaseInsensitiveHeaders:
+    if raw_headers is None:
+        return CaseInsensitiveHeaders()
+    items_fn = getattr(raw_headers, "items", None)
+    if callable(items_fn):
+        return CaseInsensitiveHeaders(items_fn())
+    return CaseInsensitiveHeaders()
+
+
+def get_header_ci(
+    headers: Mapping[str, str] | None,
+    name: str,
+    default: str | None = None,
+) -> str | None:
+    if not headers:
+        return default
+    if isinstance(headers, CaseInsensitiveHeaders):
+        return headers.get(name, default)
+    target = name.lower()
+    for k, v in headers.items():
+        if str(k).lower() == target:
+            return v
+    return default
+
+
+def assert_authenticated_crm_root_redirect(
+    status_code: int,
+    headers: Mapping[str, str] | None,
+    expected_location: str = "/cskh",
+) -> str:
+    """Enforce HTTP 302 -> `/cskh` on authenticated `/crm` with case-insensitive header lookup."""
+    location = get_header_ci(headers, "location")
+    assert status_code == 302 and location == expected_location, (
+        f"Expected 302 -> {expected_location} on authenticated /crm, "
+        f"got {status_code} ({location!r})"
+    )
+    return location
+
+
 def http_call_with_cookies(
     opener: urllib.request.OpenerDirector,
     url: str,
@@ -681,7 +766,7 @@ def http_call_with_cookies(
     method: str = "GET",
     data: bytes | None = None,
     headers: dict[str, str] | None = None,
-) -> tuple[int, dict[str, str], list[str], str]:
+) -> tuple[int, CaseInsensitiveHeaders, list[str], str]:
     """Performs HTTP request preserving every individual `Set-Cookie` header line."""
     hdrs = {"Host": site_host}
     if headers:
@@ -691,11 +776,11 @@ def http_call_with_cookies(
         with opener.open(req, timeout=25) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             set_cookies = list(resp.headers.get_all("Set-Cookie") or [])
-            return resp.status, dict(resp.headers.items()), set_cookies, body
+            return resp.status, normalize_response_headers(resp.headers), set_cookies, body
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
         set_cookies = list(exc.headers.get_all("Set-Cookie") or []) if exc.headers else []
-        return exc.code, dict(exc.headers.items()) if exc.headers else {}, set_cookies, body
+        return exc.code, normalize_response_headers(exc.headers), set_cookies, body
 
 
 def http_call(
@@ -705,7 +790,7 @@ def http_call(
     method: str = "GET",
     data: bytes | None = None,
     headers: dict[str, str] | None = None,
-) -> tuple[int, dict[str, str], str]:
+) -> tuple[int, CaseInsensitiveHeaders, str]:
     status, resp_headers, _, body = http_call_with_cookies(
         opener, url, site_host, method=method, data=data, headers=headers
     )
@@ -720,7 +805,7 @@ def http_call_bytes(
     data: bytes | None = None,
     headers: dict[str, str] | None = None,
     timeout: int = 60,
-) -> tuple[int, dict[str, str], bytes]:
+) -> tuple[int, CaseInsensitiveHeaders, bytes]:
     """Performs HTTP request returning raw response bytes (used for PDF downloads)."""
     hdrs = {"Host": site_host}
     if headers:
@@ -730,13 +815,12 @@ def http_call_bytes(
         with opener.open(req, timeout=timeout) as resp:
             return (
                 resp.status,
-                {k.lower(): v for k, v in resp.headers.items()},
+                normalize_response_headers(resp.headers),
                 resp.read(),
             )
     except urllib.error.HTTPError as exc:
         raw = exc.read() if exc.fp else b""
-        resp_hdrs = {k.lower(): v for k, v in exc.headers.items()} if exc.headers else {}
-        return exc.code, resp_hdrs, raw
+        return exc.code, normalize_response_headers(exc.headers), raw
 
 
 def parse_sid_cookie_attributes(
@@ -2287,13 +2371,15 @@ def run_http_and_socketio_smoke(
     csrf_token = csrf_match.group(1)
     logger.register_secret(csrf_token, "<REDACTED_CSRF_TOKEN>")
 
-    crm_code, _, crm_html = http_call(auth_opener, f"{base_url}/crm", site_name)
-    assert crm_code == 200, f"Expected 200 on authenticated /crm, got {crm_code}"
-    assert 'data-cskh-crm-theme="1"' in crm_html, "Missing crm-theme.css link in authenticated /crm HTML"
-    assert "crm-sidebar-bridge.js" in crm_html, "Missing crm-sidebar-bridge.js in authenticated /crm HTML"
+    crm_root_code, crm_root_hdrs, _ = http_call(auth_opener, f"{base_url}/crm", site_name)
+    assert_authenticated_crm_root_redirect(crm_root_code, crm_root_hdrs, "/cskh")
+    crm_code, _, crm_html = http_call(auth_opener, f"{base_url}/crm/leads", site_name)
+    assert crm_code == 200, f"Expected 200 on authenticated /crm/leads, got {crm_code}"
+    assert 'data-cskh-crm-theme="1"' in crm_html, "Missing crm-theme.css link in authenticated /crm/leads HTML"
+    assert "crm-sidebar-bridge.js" in crm_html, "Missing crm-sidebar-bridge.js in authenticated /crm/leads HTML"
     logger.info(
         f"Vietnamese UI & SPA checks passed: /cskh/dashboard={dash_code}, "
-        f"/cskh/quality-overview={ui_code}, /crm={crm_code}, matched_labels={matched_vi_labels}"
+        f"/cskh/quality-overview={ui_code}, /crm=302->/cskh, /crm/leads={crm_code}, matched_labels={matched_vi_labels}"
     )
 
     # 4. CSRF negative (forged + missing) & positive smoke

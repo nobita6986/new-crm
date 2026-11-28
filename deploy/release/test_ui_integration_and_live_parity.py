@@ -110,6 +110,7 @@ class TestUiIntegrationAndLiveParity(unittest.TestCase):
             "crm-theme.css",
             "desk-theme.css",
             "web-theme.css",
+            "worker-overview.css",
         ):
             css_text = (APP_DIR / "public" / "cskh" / css_name).read_text(
                 encoding="utf-8"
@@ -123,7 +124,13 @@ class TestUiIntegrationAndLiveParity(unittest.TestCase):
     ) -> None:
         css_files = [
             APP_DIR / "public" / "cskh" / name
-            for name in ("cskh.css", "crm-theme.css", "desk-theme.css", "web-theme.css")
+            for name in (
+                "cskh.css",
+                "crm-theme.css",
+                "desk-theme.css",
+                "web-theme.css",
+                "worker-overview.css",
+            )
         ]
         html_files = [APP_DIR / "templates" / "cskh" / "_shell.html"] + sorted(
             (APP_DIR / "www" / "cskh").glob("*.html")

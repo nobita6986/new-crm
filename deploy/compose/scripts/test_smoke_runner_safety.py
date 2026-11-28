@@ -381,6 +381,139 @@ class SmokeRunnerSafetyTests(unittest.TestCase):
             for tgt in srv_targets:
                 self.assertEqual(tgt, "${COMPOSE_PROJECT_NAME}-frontend", ov_path.name)
 
+    def test_http_call_redirect_headers_case_insensitive_live(self) -> None:
+        routes: dict[str, tuple[int, list[tuple[str, str]], bytes]] = {
+            "/crm-upper": (302, [("Location", "/cskh"), ("Cache-Control", "private, no-store")], b""),
+            "/crm-lower": (302, [("location", "/cskh")], b""),
+            "/crm-mixed": (302, [("LoCaTiOn", "/cskh")], b""),
+            "/crm-missing-loc": (302, [("Cache-Control", "private, no-store")], b""),
+            "/crm-wrong-target": (302, [("Location", "/crm/deals")], b""),
+            "/crm-wrong-subpath": (302, [("Location", "/cskh/dashboard")], b""),
+            "/crm-200-html": (200, [("Content-Type", "text/html; charset=utf-8")], b'<div id="app"></div>'),
+            "/crm-200-with-loc": (200, [("Location", "/cskh"), ("Content-Type", "text/html")], b"ok"),
+        }
+
+        class RedirectMatrixHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self) -> None:  # noqa: N802
+                status_code, resp_headers, payload = routes.get(
+                    self.path, (404, [], b"not found")
+                )
+                self.send_response(status_code)
+                for hk, hv in resp_headers:
+                    self.send_header(hk, hv)
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                if payload:
+                    self.wfile.write(payload)
+
+            def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+                return
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), RedirectMatrixHandler)
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            _, opener = smoke.make_http_client()
+            for valid_path in ("/crm-upper", "/crm-lower", "/crm-mixed"):
+                code, hdrs, _ = smoke.http_call(
+                    opener,
+                    f"http://127.0.0.1:{port}{valid_path}",
+                    "p4-smoke-ut.localhost",
+                )
+                self.assertEqual(code, 302, valid_path)
+                self.assertEqual(hdrs.get("location"), "/cskh", valid_path)
+                self.assertEqual(hdrs.get("Location"), "/cskh", valid_path)
+                self.assertEqual(hdrs.get("LoCaTiOn"), "/cskh", valid_path)
+                self.assertIn("Location", hdrs)
+                self.assertIn("location", hdrs)
+                self.assertEqual(
+                    smoke.assert_authenticated_crm_root_redirect(code, hdrs),
+                    "/cskh",
+                    valid_path,
+                )
+
+            # Missing Location header on 302 must fail
+            miss_code, miss_hdrs, _ = smoke.http_call(
+                opener,
+                f"http://127.0.0.1:{port}/crm-missing-loc",
+                "p4-smoke-ut.localhost",
+            )
+            self.assertEqual(miss_code, 302)
+            self.assertIsNone(miss_hdrs.get("location"))
+            with self.assertRaisesRegex(
+                AssertionError, r"Expected 302 -> /cskh on authenticated /crm, got 302 \(None\)"
+            ):
+                smoke.assert_authenticated_crm_root_redirect(miss_code, miss_hdrs)
+
+            # Redirect to wrong destination must fail
+            for bad_path, bad_loc in (
+                ("/crm-wrong-target", "/crm/deals"),
+                ("/crm-wrong-subpath", "/cskh/dashboard"),
+            ):
+                bad_code, bad_hdrs, _ = smoke.http_call(
+                    opener,
+                    f"http://127.0.0.1:{port}{bad_path}",
+                    "p4-smoke-ut.localhost",
+                )
+                self.assertEqual(bad_code, 302)
+                self.assertEqual(bad_hdrs.get("location"), bad_loc)
+                with self.assertRaisesRegex(
+                    AssertionError,
+                    r"Expected 302 -> /cskh on authenticated /crm, got 302",
+                ):
+                    smoke.assert_authenticated_crm_root_redirect(bad_code, bad_hdrs)
+
+            # HTTP 200 instead of 302 must fail (with or without Location header)
+            for ok_path in ("/crm-200-html", "/crm-200-with-loc"):
+                ok_code, ok_hdrs, _ = smoke.http_call(
+                    opener,
+                    f"http://127.0.0.1:{port}{ok_path}",
+                    "p4-smoke-ut.localhost",
+                )
+                self.assertEqual(ok_code, 200)
+                with self.assertRaisesRegex(
+                    AssertionError,
+                    r"Expected 302 -> /cskh on authenticated /crm, got 200",
+                ):
+                    smoke.assert_authenticated_crm_root_redirect(ok_code, ok_hdrs)
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_assert_authenticated_crm_root_redirect_plain_dict_and_bytes_callers(self) -> None:
+        for hdr_key in ("Location", "location", "LOCATION", "lOcAtIoN"):
+            self.assertEqual(
+                smoke.assert_authenticated_crm_root_redirect(302, {hdr_key: "/cskh"}),
+                "/cskh",
+            )
+
+        for invalid_case in (
+            (302, {}),
+            (302, None),
+            (302, {"Location": ""}),
+            (302, {"Location": "/crm"}),
+            (302, {"Location": "/crm/dashboard"}),
+            (302, {"Location": "/cskh?redirect=/crm/deals"}),
+            (302, {"Location": "https://evil.example/cskh"}),
+            (200, {"Location": "/cskh"}),
+            (200, {}),
+            (301, {"Location": "/cskh"}),
+            (303, {"Location": "/cskh"}),
+            (403, {"Location": "/cskh"}),
+        ):
+            status_code, hdrs = invalid_case
+            with self.subTest(status=status_code, headers=hdrs):
+                with self.assertRaises(AssertionError):
+                    smoke.assert_authenticated_crm_root_redirect(status_code, hdrs)
+
+        ci_hdrs = smoke.CaseInsensitiveHeaders([("Content-Type", "application/pdf"), ("X-Custom", "1")])
+        self.assertIsInstance(ci_hdrs, dict)
+        self.assertEqual(ci_hdrs.get("content-type"), "application/pdf")
+        self.assertEqual(ci_hdrs.get("Content-Type"), "application/pdf")
+        self.assertEqual(ci_hdrs.get("CONTENT-TYPE"), "application/pdf")
+        self.assertEqual(json.loads(json.dumps(ci_hdrs))["content-type"], "application/pdf")
+
 
 if __name__ == "__main__":
     unittest.main()

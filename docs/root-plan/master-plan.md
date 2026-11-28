@@ -1,5 +1,7 @@
 # MASTER PLAN — HỆ THỐNG CRM & QUẢN TRỊ CHẤT LƯỢNG CSKH
 
+> **Cập nhật định hướng sản phẩm 26/11/2026:** hệ thống phục vụ **bộ phận marketing quản lý và chăm sóc người lao động**. Tổng quan vận hành lấy người lao động, đầu việc và lịch hẹn làm trung tâm; xem [ADR sản phẩm chăm sóc người lao động](../architecture/adr-worker-care-product.md). Các tên kỹ thuật CRM được tái sử dụng, còn dashboard bán hàng và giá trị giao dịch không là luồng làm việc chính.
+
 > **Mã dự án:** CRM-CSKH  
 > **Phiên bản tài liệu:** 1.0 — 14/10/2026  
 > **Trạng thái:** Master plan định hướng triển khai; chưa phải đặc tả chi tiết từng phase  
