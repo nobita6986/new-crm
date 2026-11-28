@@ -2143,6 +2143,10 @@ def check_crm_branding_reload(
                 "actual_icon_hrefs_truncated": truncated,
                 "icon_parse_error": parse_error,
                 "prepaint_marker_present": marker_present,
+                "has_prepaint_comment": "<!-- hrpartner-branding-prepaint -->" in body_text,
+                "has_crm_app_root": 'id="app"' in body_text,
+                "has_crm_theme": 'data-cskh-crm-theme="1"' in body_text,
+                "body_len": len(body_text),
                 "expected_logo_present": bool(body_text and logo and logo in body_text),
                 "previous_logo_present": bool(
                     body_text and previous_logo and previous_logo in body_text

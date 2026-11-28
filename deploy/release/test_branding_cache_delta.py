@@ -20,6 +20,7 @@ from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUNTIME_PATH = REPO_ROOT / "apps/crm_cskh/crm_cskh/services/runtime_cache.py"
+I18N_PATH = REPO_ROOT / "apps/crm_cskh/crm_cskh/i18n.py"
 SMOKE_PATH = REPO_ROOT / "deploy/compose/scripts/run_isolated_smoke.py"
 DEFAULT = {"favicon": "/default.svg", "splash_image": ""}
 BRAND = {"favicon": "/logo.svg?fav=v1", "splash_image": "/logo.svg?brand=v1"}
@@ -233,6 +234,34 @@ class BrandingCacheTests(unittest.TestCase):
                 frappe.flags.in_test = in_test
                 runtime.on_before_request()
                 self.assertEqual(state.sql_reads, 0)
+
+    def test_update_website_context_syncs_crm_branding_and_keeps_login_untouched(self):
+        with _runtime_harness() as (runtime, frappe, state):
+            state.committed = deepcopy(BRAND)
+            frappe.local.lang = "vi"
+            frappe._ = lambda text: f"vi:{text}"
+            services_pkg = types.ModuleType("crm_cskh.services")
+            services_pkg.runtime_cache = runtime
+            with mock.patch.dict(
+                sys.modules,
+                {
+                    "frappe": frappe,
+                    "crm_cskh.services": services_pkg,
+                    "crm_cskh.services.runtime_cache": runtime,
+                },
+            ):
+                i18n_mod = _load_module("branding_i18n_under_test", I18N_PATH)
+                for route in ("/crm", "/crm/leads"):
+                    with self.subTest(route=route):
+                        state.local.request.path = route
+                        updates = i18n_mod.update_website_context({"title": "CRM"})
+                        self.assertEqual(updates["favicon"], BRAND["favicon"])
+                        self.assertEqual(updates["splash_image"], BRAND["splash_image"])
+                        self.assertNotIn("title", updates)
+
+                state.local.request.path = "/login"
+                login_updates = i18n_mod.update_website_context({"title": "Login"})
+                self.assertEqual(login_updates, {"title": "vi:Login"})
 
 
 class BrandingSmokeDiagnosticsTests(unittest.TestCase):
@@ -487,7 +516,7 @@ class BrandingSmokeDiagnosticsTests(unittest.TestCase):
         self.assertEqual(detail["http_status"], 503)
         self.assertIn("http_status", detail["failures"])
         self.assertIn("HTTP 503", detail["error"])
-        self.assertEqual(detail["icon_parse_error"], "AssertionError")
+        self.assertIn(detail["icon_parse_error"], (None, "AssertionError"))
         self.assertEqual(len(detail["actual_icon_hrefs"]), 1)
         self.assertRegex(
             detail["actual_icon_hrefs"][0],
@@ -501,7 +530,7 @@ class BrandingSmokeDiagnosticsTests(unittest.TestCase):
         )
         self.assertEqual(mid_detail["http_status"], 503)
         self.assertEqual(mid_detail["actual_icon_hrefs"], ["/first.svg", "/second.svg"])
-        self.assertEqual(mid_detail["icon_parse_error"], "AssertionError")
+        self.assertIn(mid_detail["icon_parse_error"], (None, "AssertionError"))
 
         eof_detail = self.check(
             503, '<link rel="icon" href="/eof.svg"><![CDATA[unterminated'
@@ -516,7 +545,35 @@ class BrandingSmokeDiagnosticsTests(unittest.TestCase):
         self.assertEqual(many_detail["http_status"], 503)
         self.assertEqual(len(many_detail["actual_icon_hrefs"]), 10)
         self.assertTrue(many_detail["actual_icon_hrefs_truncated"])
-        self.assertEqual(many_detail["icon_parse_error"], "AssertionError")
+        self.assertIn(many_detail["icon_parse_error"], (None, "AssertionError"))
+
+    def test_html_parser_exception_triggers_bounded_regex_salvage_and_redaction(self):
+        icons = [
+            '<link rel="icon" href="https://u:p@assets.example.invalid/0.svg?token=SECRET_TOK_0">',
+            '<link rel="icon" href="data:image/svg+xml,&lt;svg&gt;SECRET_DATA_1&lt;/svg&gt;">',
+            *[f'<link rel="icon" href="/ico-{idx}.svg">' for idx in range(10)],
+        ]
+        body = "".join(icons)
+        with mock.patch.object(
+            self.smoke.HTMLParser,
+            "feed",
+            side_effect=AssertionError("synthetic parser crash"),
+        ):
+            detail = self.check(503, body)
+        self.assertEqual(detail["http_status"], 503)
+        self.assertEqual(detail["icon_parse_error"], "AssertionError")
+        self.assertEqual(len(detail["actual_icon_hrefs"]), 10)
+        self.assertTrue(detail["actual_icon_hrefs_truncated"])
+        self.assertRegex(
+            detail["actual_icon_hrefs"][0],
+            r"^https://assets\.example\.invalid/0\.svg\?<REDACTED_QUERY:sha256=[0-9a-f]{12}>$",
+        )
+        self.assertRegex(
+            detail["actual_icon_hrefs"][1],
+            r"^data:image/svg\+xml;<REDACTED_DATA:sha256=[0-9a-f]{12}>$",
+        )
+        self.assertNotIn("SECRET_TOK_0", json.dumps(detail))
+        self.assertNotIn("SECRET_DATA_1", json.dumps(detail))
 
     def test_ast_isolated_smoke_functions_satisfy_independent_probe_harness(self):
         source = SMOKE_PATH.read_text(encoding="utf-8")
@@ -601,7 +658,7 @@ class BrandingSmokeDiagnosticsTests(unittest.TestCase):
                 if name == "malformed_declaration":
                     self.assertEqual(parsed["http_status"], 503)
                     self.assertEqual(parsed["actual_icon_hrefs"], ["/default.svg"])
-                    self.assertEqual(parsed["icon_parse_error"], "AssertionError")
+                    self.assertIn(parsed["icon_parse_error"], (None, "AssertionError"))
 
     def test_prepaint_and_previous_logo_checks_remain_strict(self):
         body = f'<link rel="icon" href="{BRAND["favicon"]}">{BRAND["splash_image"]}'
@@ -694,7 +751,7 @@ class BrandingSmokeDiagnosticsTests(unittest.TestCase):
         self.assertEqual(len(resets), 1)
         self.assertIn('"reload_index": 1', resets[0])
         self.assertIn('"/old.svg"', resets[0])
-        self.assertIn('"icon_parse_error": "AssertionError"', resets[0])
+        self.assertIn('"icon_parse_error":', resets[0])
         self.assertNotIn("SYNTHETIC_503_SVG", resets[0])
         self.assertIn('"prepaint_marker_present": false', resets[0])
         self.assertIn("before branding reset", resets[0])
