@@ -36,6 +36,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from html.parser import HTMLParser
 
 COMPOSE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 REPO_ROOT = COMPOSE_ROOT.parent.parent
@@ -143,6 +144,181 @@ class SmokeLogger:
         for raw_val, placeholder in self._secrets.items():
             if raw_val in text:
                 raise RuntimeError(f"Secret leak detected prior to output ({placeholder})")
+
+    def sanitize_url(self, value: str) -> str:
+        """Normalize URLs for diagnostics without userinfo, query/fragment secrets, or payloads."""
+        import urllib.parse as _urlparse
+
+        raw = self.scrub(str(value or "")).strip()
+        if not raw:
+            return ""
+        if raw[:5].lower() == "data:":
+            payload = raw[5:]
+            digest = hashlib.sha256(
+                payload.encode("utf-8", errors="replace")
+            ).hexdigest()[:12]
+            header = payload.partition(",")[0] if "," in payload[:128] else ""
+            media = header.split(";", 1)[0].strip().lower()
+            if re.fullmatch(
+                r"[a-z0-9][a-z0-9.+-]{0,31}/[a-z0-9][a-z0-9.+-]{0,63}", media
+            ):
+                return f"data:{media};<REDACTED_DATA:sha256={digest}>"
+            return f"data:<REDACTED_DATA:sha256={digest}>"
+
+        scheme_match = re.match(r"^([a-zA-Z][a-zA-Z0-9+.-]{0,31}):(.*)$", raw)
+        if scheme_match:
+            cand_scheme = scheme_match.group(1).lower()
+            if cand_scheme not in ("http", "https"):
+                if cand_scheme in {
+                    "about",
+                    "blob",
+                    "file",
+                    "ftp",
+                    "javascript",
+                    "vbscript",
+                    "ws",
+                    "wss",
+                }:
+                    digest = hashlib.sha256(
+                        scheme_match.group(2).encode("utf-8", errors="replace")
+                    ).hexdigest()[:12]
+                    return f"{cand_scheme}:<REDACTED_PAYLOAD:sha256={digest}>"
+                return "<UNSUPPORTED_SCHEME_URL>"
+
+        if re.search(r"[\x00-\x20\x7f\\]", raw):
+            return "<MALFORMED_URL>"
+
+        try:
+            parts = _urlparse.urlsplit(raw)
+            scheme = parts.scheme.lower()
+            if scheme and scheme not in ("http", "https"):
+                return "<UNSUPPORTED_SCHEME_URL>"
+            if scheme and not parts.netloc:
+                return "<MALFORMED_URL>"
+            host = parts.hostname or ""
+            port = parts.port
+            if parts.netloc and not host:
+                return "<MALFORMED_URL>"
+            authority = ""
+            if parts.netloc:
+                if ":" in host:
+                    if not re.fullmatch(r"[0-9a-fA-F:.]{2,45}", host):
+                        return "<MALFORMED_URL>"
+                    safe_host = f"[{host.lower()}]"
+                else:
+                    if (
+                        not re.fullmatch(r"[a-zA-Z0-9.-]{1,253}", host)
+                        or ".." in host
+                        or host.startswith("-")
+                        or host.endswith("-")
+                    ):
+                        return "<MALFORMED_URL>"
+                    safe_host = host.lower()
+                authority = f"{safe_host}:{port}" if port is not None else safe_host
+
+            safe_segments: list[str] = []
+            for seg in parts.path.split("/"):
+                if not seg:
+                    safe_segments.append("")
+                    continue
+                base_seg, sep, _ = seg.partition(";")
+                suffix = ";<REDACTED_PARAM>" if sep else ""
+                decoded_seg = _urlparse.unquote(base_seg)
+                if "<REDACTED_" in base_seg:
+                    cleaned_seg = base_seg
+                elif (
+                    any(ch in decoded_seg for ch in ("@", "=", ":", "/", "\\"))
+                    or bool(re.search(r"[\x00-\x1f\x7f]", decoded_seg))
+                    or bool(re.match(r"^eyJ[A-Za-z0-9_-]{8,}", decoded_seg))
+                    or len(decoded_seg) > 64
+                    or (
+                        len(decoded_seg) >= 32
+                        and bool(re.fullmatch(r"[A-Za-z0-9_-]+", decoded_seg))
+                    )
+                ):
+                    cleaned_seg = "<REDACTED_SEGMENT>"
+                else:
+                    cleaned_seg = _urlparse.quote(base_seg, safe=".-_~%")
+                safe_segments.append(cleaned_seg + suffix)
+
+            safe_path = "/".join(safe_segments)
+            if not authority and safe_path.startswith("//"):
+                safe_path = "/" + safe_path.lstrip("/")
+
+            safe_query = ""
+            if parts.query:
+                q_digest = hashlib.sha256(
+                    parts.query.encode("utf-8", errors="replace")
+                ).hexdigest()[:12]
+                safe_query = f"<REDACTED_QUERY:sha256={q_digest}>"
+
+            safe_fragment = ""
+            if parts.fragment:
+                f_digest = hashlib.sha256(
+                    parts.fragment.encode("utf-8", errors="replace")
+                ).hexdigest()[:12]
+                safe_fragment = f"<REDACTED_FRAGMENT:sha256={f_digest}>"
+
+            safe_url = _urlparse.urlunsplit(
+                (scheme, authority, safe_path, safe_query, safe_fragment)
+            )
+            return safe_url if len(safe_url) <= 256 else safe_url[:240] + "<TRUNCATED>"
+        except (TypeError, ValueError):
+            return "<MALFORMED_URL>"
+
+    def sanitize_error(self, text: str) -> str:
+        """Scrub diagnostic error strings and normalize embedded URLs, tokens, and data URIs."""
+        out = self.scrub(str(text or ""))
+        out = re.sub(
+            r'"(data:(?:\\.|[^"\\])*)"',
+            lambda m: '"' + self.sanitize_url(m.group(1)) + '"',
+            out,
+            flags=re.IGNORECASE,
+        )
+        out = re.sub(
+            r"'(data:(?:\\.|[^'\\])*)'",
+            lambda m: "'" + self.sanitize_url(m.group(1)) + "'",
+            out,
+            flags=re.IGNORECASE,
+        )
+        out = re.sub(
+            r"(?i)\bdata:(?:[a-z0-9.+-]{1,32}/[a-z0-9.+-]{1,64})?(?:;[a-z0-9.=+-]+)*,[^\r\n]*",
+            lambda m: self.sanitize_url(m.group(0)),
+            out,
+        )
+
+        def _replace_url(match: re.Match[str]) -> str:
+            raw_url = match.group(0)
+            trimmed = raw_url.rstrip(".,;)]}")
+            tail = raw_url[len(trimmed) :]
+            return self.sanitize_url(trimmed) + tail
+
+        out = re.sub(
+            r"(?i)(?:\b[a-z][a-z0-9+.-]{0,31}://|(?<![:\w])//)[^\s\"'<>]+",
+            _replace_url,
+            out,
+        )
+        out = re.sub(
+            r"\b[^\s/@:]+:[^\s/@]+@([A-Za-z0-9.-]+(?::\d+)?)",
+            r"<REDACTED_USERINFO>@\1",
+            out,
+        )
+        out = re.sub(
+            r"(?i)\b(x-amz-credential|x-amz-signature|x-amz-security-token|"
+            r"x-goog-credential|x-goog-signature|access_token|refresh_token|"
+            r"id_token|api_key|apikey|client_secret|secret|password|passwd|"
+            r"pwd|token|sig|signature|authorization|cookie|set-cookie)"
+            r"\s*([=:])\s*(?!<REDACTED_)([^\s&,;\"'<>]+)",
+            r"\1\2<REDACTED_TOKEN>",
+            out,
+        )
+        out = re.sub(
+            r"(?i)\b(Bearer|Basic)\s+(?!<REDACTED_)[A-Za-z0-9._~+/=-]+",
+            r"\1 <REDACTED_TOKEN>",
+            out,
+        )
+        out = re.sub(r"[\x00-\x1f\x7f]+", " ", out).strip()
+        return out if len(out) <= 320 else out[:304] + "<TRUNCATED>"
 
     def render(self) -> str:
         text = "\n".join(self._entries) + "\n"
@@ -1931,6 +2107,148 @@ finally:
         )
 
 
+def check_crm_branding_reload(
+    status: int | None,
+    body: str,
+    *,
+    phase: str,
+    reload_index: int,
+    favicon: str,
+    logo: str,
+    logger: SmokeLogger,
+    require_prepaint: bool = False,
+    previous_logo: str = "",
+    transport_error: str = "",
+) -> None:
+    """Preserve strict branding checks and capture sanitized diagnostics before reset."""
+    import html as _html
+
+    body_text = body if isinstance(body, str) else str(body or "")
+    marker_present = 'id="hrpartner-branding-prepaint"' in body_text
+    failures: list[str] = []
+    if transport_error:
+        failures.append("http_transport_error")
+    else:
+        if status != 200:
+            failures.append("http_status")
+        if f'href="{favicon}"' not in body_text:
+            failures.append("favicon")
+        if logo not in body_text or (require_prepaint and not marker_present):
+            failures.append("prepaint_logo")
+        if previous_logo and previous_logo in body_text:
+            failures.append("previous_logo")
+    if not failures:
+        return
+
+    class IconLinks(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=True)
+            self.hrefs: list[str] = []
+            self.truncated = False
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            if tag.lower() != "link":
+                return
+            values: dict[str, str] = {}
+            for key, val in attrs:
+                if key:
+                    values.setdefault(key.lower(), val or "")
+            if "icon" in values.get("rel", "").lower().split():
+                if len(self.hrefs) < 10:
+                    self.hrefs.append(logger.sanitize_url(values.get("href", "")))
+                else:
+                    self.truncated = True
+
+    hrefs: list[str] = []
+    truncated = False
+    parse_error: str | None = None
+    try:
+        if body_text:
+            links = IconLinks()
+            try:
+                links.feed(body_text[:262144])
+                links.close()
+                hrefs = links.hrefs
+                truncated = links.truncated
+            except Exception as exc:
+                # HTML is untrusted; diagnostic extraction must never replace primary failure.
+                parse_error = type(exc).__name__
+                hrefs = list(links.hrefs)
+                truncated = links.truncated
+                salvaged: list[str] = []
+                salvaged_truncated = False
+                for tag_match in re.finditer(r"(?is)<link\b([^>]{0,2048})>", body_text[:65536]):
+                    attrs_map: dict[str, str] = {}
+                    for attr_match in re.finditer(
+                        r"""(?is)\b(rel|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))""",
+                        tag_match.group(1),
+                    ):
+                        attr_name = attr_match.group(1).lower()
+                        if attr_name not in attrs_map:
+                            raw_attr = (
+                                attr_match.group(2)
+                                if attr_match.group(2) is not None
+                                else (
+                                    attr_match.group(3)
+                                    if attr_match.group(3) is not None
+                                    else (attr_match.group(4) or "")
+                                )
+                            )
+                            attrs_map[attr_name] = _html.unescape(raw_attr)
+                    if "icon" in attrs_map.get("rel", "").lower().split():
+                        if len(salvaged) < 10:
+                            salvaged.append(logger.sanitize_url(attrs_map.get("href", "")))
+                        else:
+                            salvaged_truncated = True
+                            break
+                if len(salvaged) >= len(hrefs):
+                    hrefs = salvaged
+                    truncated = truncated or salvaged_truncated
+    except Exception as exc:
+        parse_error = parse_error or type(exc).__name__
+
+    if transport_error:
+        raw_error = f"Transport error on /crm/leads: {logger.sanitize_error(transport_error)}"
+    elif status != 200:
+        raw_error = f"HTTP {status} error on /crm/leads ({', '.join(failures)})"
+    else:
+        raw_error = f"Branding mismatch on HTTP 200 /crm/leads ({', '.join(failures)})"
+
+    detail = logger.scrub(
+        json.dumps(
+            {
+                "phase": phase,
+                "reload_index": reload_index,
+                "http_status": status,
+                "failures": failures,
+                "error": logger.sanitize_error(raw_error),
+                "expected_icon_href": logger.sanitize_url(favicon),
+                "actual_icon_hrefs": hrefs,
+                "actual_icon_hrefs_truncated": truncated,
+                "icon_parse_error": parse_error,
+                "prepaint_marker_present": marker_present,
+                "has_prepaint_comment": "<!-- hrpartner-branding-prepaint -->" in body_text,
+                "has_crm_app_root": 'id="app"' in body_text,
+                "has_crm_theme": 'data-cskh-crm-theme="1"' in body_text,
+                "body_len": len(body_text),
+                "expected_logo_present": bool(body_text and logo and logo in body_text),
+                "previous_logo_present": bool(
+                    body_text and previous_logo and previous_logo in body_text
+                ),
+                "body_sha256": (
+                    hashlib.sha256(body_text.encode("utf-8", errors="replace")).hexdigest()
+                    if not transport_error
+                    else None
+                ),
+            },
+            sort_keys=True,
+        )
+    )
+    logger.assert_clean(detail)
+    logger.info(f"CRM branding reload failed before branding reset: {detail}")
+    raise AssertionError(f"CRM branding reload failed: {detail}")
+
+
 def run_http_and_socketio_smoke(
     project_name: str,
     env_file: pathlib.Path,
@@ -2140,19 +2458,66 @@ def run_http_and_socketio_smoke(
                 "X-Frappe-CSRF-Token": csrf_token,
             },
         )
-        assert b_code == 200, f"Branding update failed ({b_code}): {b_body[:200]}"
+        assert b_code == 200, f"Branding update failed ({b_code}): {logger.sanitize_error(b_body)}"
 
     b_logo_v1 = "/assets/crm_cskh/cskh/logo.svg?brand=smoke-v1"
     b_fav_v1 = "/assets/crm_cskh/cskh/logo.svg?fav=smoke-v1"
     b_logo_v2 = "/assets/crm_cskh/cskh/logo.svg?brand=smoke-v2"
     b_fav_v2 = "/assets/crm_cskh/cskh/logo.svg?fav=smoke-v2"
+
+    def _check_crm_leads_reload(
+        *,
+        phase: str,
+        reload_index: int,
+        favicon: str,
+        logo: str,
+        require_prepaint: bool = False,
+        previous_logo: str = "",
+    ) -> None:
+        try:
+            st, _, html = http_call(auth_opener, f"{base_url}/crm/leads", site_name)
+        except Exception as transport_exc:
+            check_crm_branding_reload(
+                None,
+                "",
+                phase=phase,
+                reload_index=reload_index,
+                favicon=favicon,
+                logo=logo,
+                logger=logger,
+                require_prepaint=require_prepaint,
+                previous_logo=previous_logo,
+                transport_error=f"{type(transport_exc).__name__}: {transport_exc}",
+            )
+            raise
+        check_crm_branding_reload(
+            st,
+            html,
+            phase=phase,
+            reload_index=reload_index,
+            favicon=favicon,
+            logo=logo,
+            logger=logger,
+            require_prepaint=require_prepaint,
+            previous_logo=previous_logo,
+        )
+
+    primary_branding_exc: BaseException | None = None
+    active_phase = "v1"
+    active_reload_index = 0
+    active_favicon = b_fav_v1
     try:
         _smoke_set_branding(b_logo_v1, b_fav_v1)
-        for _ in range(6):
-            c1_st, _, c1_html = http_call(auth_opener, f"{base_url}/crm/leads", site_name)
-            assert c1_st == 200 and f'href="{b_fav_v1}"' in c1_html, "Missing favicon v1 on /crm/leads reload"
-            assert 'id="hrpartner-branding-prepaint"' in c1_html and b_logo_v1 in c1_html, (
-                "Missing HRPARTNER prepaint logo v1 on /crm/leads reload"
+        for reload_index in range(1, 7):
+            active_phase = "v1"
+            active_reload_index = reload_index
+            active_favicon = b_fav_v1
+            _check_crm_leads_reload(
+                phase="v1",
+                reload_index=reload_index,
+                favicon=b_fav_v1,
+                logo=b_logo_v1,
+                require_prepaint=True,
             )
             k1_st, _, k1_html = http_call(auth_opener, f"{base_url}/cskh/dashboard", site_name)
             assert (
@@ -2161,23 +2526,59 @@ def run_http_and_socketio_smoke(
                 and 'class="cskh-sidebar-logo is-brand-logo"' in k1_html
             ), "Missing brand logo v1 on /cskh/dashboard"
 
+        active_phase = "v2"
+        active_reload_index = 0
+        active_favicon = b_fav_v2
         _smoke_set_branding(b_logo_v2, b_fav_v2)
-        for _ in range(6):
-            c2_st, _, c2_html = http_call(auth_opener, f"{base_url}/crm/leads", site_name)
-            assert (
-                c2_st == 200
-                and f'href="{b_fav_v2}"' in c2_html
-                and b_logo_v2 in c2_html
-                and b_logo_v1 not in c2_html
-            ), "Stale logo/favicon v1 survived warm reload on /crm/leads"
+        for reload_index in range(1, 7):
+            active_phase = "v2"
+            active_reload_index = reload_index
+            active_favicon = b_fav_v2
+            _check_crm_leads_reload(
+                phase="v2",
+                reload_index=reload_index,
+                favicon=b_fav_v2,
+                logo=b_logo_v2,
+                previous_logo=b_logo_v1,
+            )
             k2_st, _, k2_html = http_call(auth_opener, f"{base_url}/cskh/dashboard", site_name)
             assert (
                 k2_st == 200
                 and f'src="{b_logo_v2}"' in k2_html
                 and b_logo_v1 not in k2_html
             ), "Stale logo v1 survived warm SSR cache on /cskh/dashboard"
+    except BaseException as branding_exc:
+        primary_branding_exc = branding_exc
+        if "CRM branding reload failed:" not in str(branding_exc):
+            fallback_detail = logger.scrub(
+                json.dumps(
+                    {
+                        "phase": active_phase,
+                        "reload_index": active_reload_index,
+                        "http_status": None,
+                        "failures": ["branding_smoke_step_error"],
+                        "error": logger.sanitize_error(
+                            f"{type(branding_exc).__name__}: {branding_exc}"
+                        ),
+                        "expected_icon_href": logger.sanitize_url(active_favicon),
+                    },
+                    sort_keys=True,
+                )
+            )
+            logger.assert_clean(fallback_detail)
+            logger.info(f"CRM branding smoke failed before branding reset: {fallback_detail}")
+        raise
     finally:
-        _smoke_set_branding("", "")
+        if primary_branding_exc is None:
+            _smoke_set_branding("", "")
+        else:
+            try:
+                _smoke_set_branding("", "")
+            except Exception as reset_exc:
+                logger.info(
+                    "CRM branding reset in finally failed after primary error: "
+                    + logger.sanitize_error(f"{type(reset_exc).__name__}: {reset_exc}")
+                )
     kr_st, _, kr_html = http_call(auth_opener, f"{base_url}/cskh/dashboard", site_name)
     assert (
         kr_st == 200 and b_logo_v2 not in kr_html and "is-brand-logo" not in kr_html

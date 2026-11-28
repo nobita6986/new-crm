@@ -27,7 +27,18 @@ def set_guest_language():
 
 
 def update_website_context(context):
-	"""Translate the login document title, which Frappe sets as a raw string."""
+	"""Translate the login document title and keep `/crm` branding synced with `DOMAIN_BRANDING`."""
+	updates = {}
 	if frappe.local.lang == "vi" and context.get("title") == "Login":
-		return {"title": frappe._("Login")}
-	return {}
+		updates["title"] = frappe._("Login")
+	req = getattr(getattr(frappe, "local", None), "request", None)
+	req_path = str(getattr(req, "path", "") or "")
+	if req_path == "/crm" or req_path.startswith("/crm/"):
+		try:
+			branding = runtime_cache.get_website_branding()
+			if branding.get("favicon"):
+				updates["favicon"] = branding["favicon"]
+			updates["splash_image"] = branding.get("splash_image") or ""
+		except Exception:
+			pass
+	return updates

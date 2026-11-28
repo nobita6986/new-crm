@@ -33,6 +33,7 @@ import io
 import os
 import re
 import stat
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -53,6 +54,14 @@ _ORIG_PDFKIT_FROM_FILE: Any = None
 _ORIG_GET_BASE64_IMAGE: Any = None
 _ORIG_INLINE_PRIVATE_IMAGES: Any = None
 _ORIG_GET_COOKIE_OPTIONS: Any = None
+_ORIG_READ_OPTIONS_FROM_HTML: Any = None
+_ORIG_GET_PRINT_FORMAT_STYLES: Any = None
+_ORIG_PREPARE_HEADER_FOOTER: Any = None
+_ORIG_CSSUTILS_FETCH_DEFAULT: Any = None
+_ORIG_CSSUTILS_UTIL_DEFAULT: Any = None
+_ORIG_CSSUTILS_PARSER_INIT: Any = None
+_ORIG_CSSUTILS_PARSER_SET_FETCHER: Any = None
+_ORIG_CSSUTILS_PARSER_PARSE_FILE: Any = None
 _ORIG_IMPORT_WEASYPRINT: Any = None
 _ORIG_WP_HTML: Any = None
 _ORIG_WP_CSS: Any = None
@@ -785,6 +794,16 @@ def _resolve_image_attr_to_safe_data_uri(raw_src: str, *, include_private_files:
 	return _SAFE_TRANSPARENT_GIF_DATA_URI
 
 
+def _extract_bs4_style_text(style_tag: Any) -> str:
+	"""Extract raw CSS text from a BeautifulSoup `<style>` tag across `html5lib` and `html.parser`."""
+	if getattr(style_tag, "string", None) is not None:
+		return str(style_tag.string)
+	contents = getattr(style_tag, "contents", None)
+	if contents:
+		return "".join(str(child) for child in contents)
+	return str(style_tag.get_text() or "")
+
+
 def inline_local_pdf_assets(html: str) -> str:
 	"""Sanitize HTML & CSS and inline authorized local `/assets/...`, `/files/...`, and `/private/files/...`."""
 	if not html:
@@ -824,7 +843,7 @@ def inline_local_pdf_assets(html: str) -> str:
 		link_tag.decompose()
 
 	for style_tag in soup.find_all("style"):
-		raw_css = style_tag.get_text()
+		raw_css = _extract_bs4_style_text(style_tag)
 		if raw_css:
 			style_tag.string = sanitize_pdf_css(raw_css, include_private_files=True)
 
@@ -1127,6 +1146,108 @@ def _guarded_frappe_get_cookie_options() -> dict[str, Any]:
 	return {}
 
 
+def _guarded_cssutils_fetcher(url: str) -> tuple[str | None, str]:
+	"""Local-only `cssutils` `@import` fetcher blocking SSRF, redirects, `file://`, and private files."""
+	cleaned = str(url or "").strip()
+	if not cleaned:
+		return None, ""
+	resolved = _resolve_same_site_resource(cleaned, include_private_files=False)
+	if resolved is not None and resolved[1] == "text/css":
+		raw_bytes, _, css_path = resolved
+		sanitized = sanitize_pdf_css(
+			raw_bytes.decode("utf-8", errors="replace"),
+			css_file=css_path,
+			include_private_files=False,
+		)
+		return "utf-8", sanitized
+	return None, ""
+
+
+_guarded_cssutils_fetcher._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
+
+
+def _blocked_cssutils_parse_file(*_args: Any, **_kwargs: Any):
+	raise PermissionError(
+		"cssutils.parseFile is disabled by CSKH PDF security policy; parse sanitized CSS strings only"
+	)
+
+
+_blocked_cssutils_parse_file._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
+
+
+def _patch_cssutils_module(cssutils_mod: Any) -> None:
+	"""Lock `cssutils` default `@import` fetcher, `CSSParser`, and `parseFile` against SSRF & local reads."""
+	global _ORIG_CSSUTILS_FETCH_DEFAULT, _ORIG_CSSUTILS_UTIL_DEFAULT
+	global _ORIG_CSSUTILS_PARSER_INIT, _ORIG_CSSUTILS_PARSER_SET_FETCHER, _ORIG_CSSUTILS_PARSER_PARSE_FILE
+
+	if cssutils_mod is None:
+		return
+
+	with _HOOKS_LOCK:
+		fetch_submod = getattr(cssutils_mod, "_fetch", None) or sys.modules.get("cssutils._fetch")
+		if (
+			fetch_submod is not None
+			and hasattr(fetch_submod, "_defaultFetcher")
+			and not getattr(fetch_submod._defaultFetcher, "_cskh_pdf_wrapped", False)
+		):
+			if _ORIG_CSSUTILS_FETCH_DEFAULT is None:
+				_ORIG_CSSUTILS_FETCH_DEFAULT = fetch_submod._defaultFetcher
+			fetch_submod._defaultFetcher = _guarded_cssutils_fetcher
+
+		util_submod = getattr(cssutils_mod, "util", None) or sys.modules.get("cssutils.util")
+		if (
+			util_submod is not None
+			and hasattr(util_submod, "_defaultFetcher")
+			and not getattr(util_submod._defaultFetcher, "_cskh_pdf_wrapped", False)
+		):
+			if _ORIG_CSSUTILS_UTIL_DEFAULT is None:
+				_ORIG_CSSUTILS_UTIL_DEFAULT = util_submod._defaultFetcher
+			util_submod._defaultFetcher = _guarded_cssutils_fetcher
+
+		parser_cls = getattr(cssutils_mod, "CSSParser", None)
+		if parser_cls is not None:
+			orig_init = getattr(parser_cls, "__init__", None)
+			if callable(orig_init) and not getattr(orig_init, "_cskh_pdf_wrapped", False):
+				if _ORIG_CSSUTILS_PARSER_INIT is None:
+					_ORIG_CSSUTILS_PARSER_INIT = orig_init
+
+				def _wrapped_cssparser_init(self, *args: Any, **kwargs: Any) -> None:
+					call_args = list(args)
+					call_kwargs = dict(kwargs)
+					if len(call_args) >= 4:
+						call_args[3] = _guarded_cssutils_fetcher
+					else:
+						call_kwargs["fetcher"] = _guarded_cssutils_fetcher
+					_ORIG_CSSUTILS_PARSER_INIT(self, *call_args, **call_kwargs)
+
+				_wrapped_cssparser_init._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
+				parser_cls.__init__ = _wrapped_cssparser_init
+
+			orig_set_fetcher = getattr(parser_cls, "setFetcher", None)
+			if callable(orig_set_fetcher) and not getattr(orig_set_fetcher, "_cskh_pdf_wrapped", False):
+				if _ORIG_CSSUTILS_PARSER_SET_FETCHER is None:
+					_ORIG_CSSUTILS_PARSER_SET_FETCHER = orig_set_fetcher
+
+				def _wrapped_cssparser_set_fetcher(self, fetcher: Any = None):
+					del fetcher
+					return _ORIG_CSSUTILS_PARSER_SET_FETCHER(self, _guarded_cssutils_fetcher)
+
+				_wrapped_cssparser_set_fetcher._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
+				parser_cls.setFetcher = _wrapped_cssparser_set_fetcher
+
+			orig_parse_file = getattr(parser_cls, "parseFile", None)
+			if callable(orig_parse_file) and not getattr(orig_parse_file, "_cskh_pdf_wrapped", False):
+				if _ORIG_CSSUTILS_PARSER_PARSE_FILE is None:
+					_ORIG_CSSUTILS_PARSER_PARSE_FILE = orig_parse_file
+				parser_cls.parseFile = _blocked_cssutils_parse_file
+
+		mod_parse_file = getattr(cssutils_mod, "parseFile", None)
+		if callable(mod_parse_file) and not getattr(mod_parse_file, "_cskh_pdf_wrapped", False):
+			cssutils_mod.parseFile = _blocked_cssutils_parse_file
+
+		cssutils_mod._cskh_module_patched = True
+
+
 def _patch_pdfkit_module(pdfkit_mod: Any) -> None:
 	global _WRAP_INSTALL_COUNT
 	global _ORIG_PDFKIT_FROM_STRING, _ORIG_PDFKIT_FROM_URL, _ORIG_PDFKIT_FROM_FILE
@@ -1182,10 +1303,12 @@ def _patch_pdfkit_module(pdfkit_mod: Any) -> None:
 
 def _patch_frappe_pdf_module(frappe_pdf: Any) -> None:
 	global _ORIG_GET_BASE64_IMAGE, _ORIG_INLINE_PRIVATE_IMAGES, _ORIG_GET_COOKIE_OPTIONS
+	global _ORIG_READ_OPTIONS_FROM_HTML, _ORIG_GET_PRINT_FORMAT_STYLES, _ORIG_PREPARE_HEADER_FOOTER
 
 	if frappe_pdf is None:
 		return
 
+	_patch_cssutils_module(getattr(frappe_pdf, "cssutils", None))
 	_patch_pdfkit_module(getattr(frappe_pdf, "pdfkit", None))
 
 	with _HOOKS_LOCK:
@@ -1213,7 +1336,123 @@ def _patch_frappe_pdf_module(frappe_pdf: Any) -> None:
 			_guarded_frappe_get_cookie_options._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
 			frappe_pdf.get_cookie_options = _guarded_frappe_get_cookie_options
 
+		if hasattr(frappe_pdf, "get_print_format_styles") and not getattr(
+			frappe_pdf.get_print_format_styles, "_cskh_pdf_wrapped", False
+		):
+			if _ORIG_GET_PRINT_FORMAT_STYLES is None:
+				_ORIG_GET_PRINT_FORMAT_STYLES = frappe_pdf.get_print_format_styles
+
+			def _guarded_frappe_get_print_format_styles(soup: Any):
+				if soup is not None and hasattr(soup, "find_all"):
+					for style_tag in soup.find_all("style"):
+						raw_css = _extract_bs4_style_text(style_tag)
+						if raw_css:
+							style_tag.string = sanitize_pdf_css(raw_css, include_private_files=True)
+				return _ORIG_GET_PRINT_FORMAT_STYLES(soup)
+
+			_guarded_frappe_get_print_format_styles._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
+			frappe_pdf.get_print_format_styles = _guarded_frappe_get_print_format_styles
+
+		if hasattr(frappe_pdf, "read_options_from_html") and not getattr(
+			frappe_pdf.read_options_from_html, "_cskh_pdf_wrapped", False
+		):
+			if _ORIG_READ_OPTIONS_FROM_HTML is None:
+				_ORIG_READ_OPTIONS_FROM_HTML = frappe_pdf.read_options_from_html
+
+			def _guarded_frappe_read_options_from_html(html: Any):
+				rewritten_html, html_opts = _ORIG_READ_OPTIONS_FROM_HTML(html)
+				if isinstance(rewritten_html, str):
+					rewritten_html = inline_local_pdf_assets(rewritten_html)
+				return rewritten_html, html_opts
+
+			_guarded_frappe_read_options_from_html._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
+			frappe_pdf.read_options_from_html = _guarded_frappe_read_options_from_html
+
+		if hasattr(frappe_pdf, "prepare_header_footer") and not getattr(
+			frappe_pdf.prepare_header_footer, "_cskh_pdf_wrapped", False
+		):
+			if _ORIG_PREPARE_HEADER_FOOTER is None:
+				_ORIG_PREPARE_HEADER_FOOTER = frappe_pdf.prepare_header_footer
+
+			def _guarded_frappe_prepare_header_footer(soup: Any):
+				hf_opts = _ORIG_PREPARE_HEADER_FOOTER(soup)
+				if isinstance(hf_opts, dict):
+					for hf_key in ("header-html", "footer-html"):
+						hf_path = hf_opts.get(hf_key)
+						if isinstance(hf_path, str) and _is_safe_temp_header_footer_path(hf_path):
+							hf_raw_bytes = _open_regular_file_nofollow(Path(hf_path))
+							if hf_raw_bytes is not None:
+								Path(hf_path).write_text(
+									inline_local_pdf_assets(hf_raw_bytes.decode("utf-8", errors="replace")),
+									encoding="utf-8",
+								)
+				return hf_opts
+
+			_guarded_frappe_prepare_header_footer._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
+			frappe_pdf.prepare_header_footer = _guarded_frappe_prepare_header_footer
+
 		frappe_pdf._cskh_module_patched = True
+
+
+def _build_weasyprint_fc_double_free_patch() -> tuple[Any, Any] | None:
+	"""Prepare Kozea/WeasyPrint#2843 `FontConfiguration.__init__` fix for WeasyPrint < 70.0 outside `_HOOKS_LOCK`."""
+	try:
+		import inspect
+
+		wp_fonts = sys.modules.get("weasyprint.text.fonts")
+		if wp_fonts is None:
+			from weasyprint.text import fonts as wp_fonts  # type: ignore[no-redef]
+	except Exception:
+		return None
+
+	fc_cls = getattr(wp_fonts, "FontConfiguration", None)
+	orig_fc_init = getattr(fc_cls, "__init__", None)
+	if (
+		fc_cls is None
+		or not callable(orig_fc_init)
+		or getattr(orig_fc_init, "_cskh_fc_double_free_fixed", False)
+	):
+		return None
+
+	try:
+		init_src = inspect.getsource(orig_fc_init)
+	except OSError:
+		return None
+
+	before_font_map = init_src.split("self.font_map", 1)[0]
+	required_tokens = (
+		"FcInitLoadConfigAndFonts",
+		"pango_ft2_font_map_new",
+		"pango_fc_font_map_set_config",
+		"self._folder",
+		"self.strut_layouts",
+		"self.font_features",
+	)
+	if (
+		"ffi.gc" not in before_font_map
+		or init_src.count("FcConfigDestroy") < 2
+		or not all(tok in init_src for tok in required_tokens)
+	):
+		return None
+
+	ffi = getattr(wp_fonts, "ffi", None)
+	fontconfig = getattr(wp_fonts, "fontconfig", None)
+	pangoft2 = getattr(wp_fonts, "pangoft2", None)
+	gobject = getattr(wp_fonts, "gobject", None)
+	if any(x is None for x in (ffi, fontconfig, pangoft2, gobject)):
+		return None
+
+	def _safe_font_configuration_init(self) -> None:
+		self._config = fontconfig.FcInitLoadConfigAndFonts()
+		self.font_map = ffi.gc(pangoft2.pango_ft2_font_map_new(), gobject.g_object_unref)
+		pangoft2.pango_fc_font_map_set_config(ffi.cast("PangoFcFontMap *", self.font_map), self._config)
+		fontconfig.FcConfigDestroy(self._config)
+		self._folder = None
+		self.strut_layouts = {}
+		self.font_features = {}
+
+	_safe_font_configuration_init._cskh_fc_double_free_fixed = True  # type: ignore[attr-defined]
+	return fc_cls, _safe_font_configuration_init
 
 
 def _patch_weasyprint_module(weasyprint_mod: Any) -> None:
@@ -1222,10 +1461,16 @@ def _patch_weasyprint_module(weasyprint_mod: Any) -> None:
 	if weasyprint_mod is None or not hasattr(weasyprint_mod, "HTML") or not hasattr(weasyprint_mod, "CSS"):
 		return
 
-	# Build URL fetcher outside `_HOOKS_LOCK` so `from weasyprint.urls import ...` never holds `_HOOKS_LOCK`.
+	# Build URL fetcher and optional WeasyPrint < 70 FontConfiguration patch outside `_HOOKS_LOCK`
+	# so imports never execute while holding `_HOOKS_LOCK`.
 	safe_fetcher = _make_weasyprint_url_fetcher(weasyprint_mod)
+	fc_patch = _build_weasyprint_fc_double_free_patch()
 
 	with _HOOKS_LOCK:
+		if fc_patch is not None:
+			fc_cls, safe_fc_init = fc_patch
+			if not getattr(getattr(fc_cls, "__init__", None), "_cskh_fc_double_free_fixed", False):
+				fc_cls.__init__ = safe_fc_init
 		if _ORIG_WP_HTML is None and not getattr(weasyprint_mod.HTML, "_cskh_pdf_wrapped", False):
 			_ORIG_WP_HTML = weasyprint_mod.HTML
 		if _ORIG_WP_CSS is None and not getattr(weasyprint_mod.CSS, "_cskh_pdf_wrapped", False):
@@ -1287,7 +1532,9 @@ def _patch_frappe_weasyprint_module(frappe_weasyprint: Any) -> None:
 
 def patch_loaded_pdf_module(fullname: str, module: Any) -> None:
 	"""Idempotently patch a single already-loaded PDF target module without importing others."""
-	if fullname == "pdfkit":
+	if fullname == "cssutils":
+		_patch_cssutils_module(module)
+	elif fullname == "pdfkit":
 		_patch_pdfkit_module(module)
 	elif fullname == "frappe.utils.pdf":
 		_patch_frappe_pdf_module(module)

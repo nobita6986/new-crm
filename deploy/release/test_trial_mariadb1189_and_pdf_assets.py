@@ -813,6 +813,425 @@ print("LAZY_SUBPROC_JSON:" + json.dumps({
             self.assertLess(float(payload["import_ms"]), 250.0, payload)
             self.assertLess(float(payload["call_ms"]), 25.0, payload)
 
+    def test_legacy_dev_frappe_v15_123_1_cssutils_import_ssrf_and_redirect_lockdown(
+        self,
+    ) -> None:
+        """Verify `F-P4-LEGACY-DEV-PDF-CSS-SSRF-01` guard blocks `cssutils.parseString` `@import` SSRF & redirects."""
+        import http.server
+
+        hits: list[str] = []
+
+        class _ProbeHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                hits.append(self.path)
+                if self.path.startswith("/redirect"):
+                    self.send_response(302)
+                    self.send_header(
+                        "Location",
+                        f"http://127.0.0.1:{self.server.server_port}/ssrf.png",
+                    )
+                    self.end_headers()
+                    return
+                body = b".print-format { margin-top: 99mm; }"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/css")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, _fmt: str, *_args: object) -> None:
+                return
+
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _ProbeHandler)
+        port = srv.server_address[1]
+        origin = f"http://127.0.0.1:{port}"
+        th = threading.Thread(target=srv.serve_forever, daemon=True)
+        th.start()
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                root = Path(td)
+                sites = root / "sites"
+                css_dir = sites / "assets" / "crm_cskh" / "css"
+                css_dir.mkdir(parents=True)
+                (css_dir / "local-print.css").write_text(
+                    ".print-format { margin-top: 24mm; }", encoding="utf-8"
+                )
+                (sites / "dev.localhost" / "public" / "files").mkdir(parents=True)
+
+                fake_sp = root / "fake_sp"
+                (fake_sp / "cssutils").mkdir(parents=True)
+                (fake_sp / "cssutils" / "_fetch.py").write_text(
+                    "import urllib.request\n"
+                    "def _defaultFetcher(url):\n"
+                    "    with urllib.request.urlopen(url, timeout=5) as r:\n"
+                    "        return ('utf-8', r.read().decode('utf-8', 'replace'))\n",
+                    encoding="utf-8",
+                )
+                (fake_sp / "cssutils" / "util.py").write_text(
+                    "from ._fetch import _defaultFetcher\n"
+                    "def _readUrl(url, fetcher=None):\n"
+                    "    fn = fetcher or _defaultFetcher\n"
+                    "    return fn(url)\n",
+                    encoding="utf-8",
+                )
+                (fake_sp / "cssutils" / "__init__.py").write_text(
+                    "import re, types\n"
+                    "from . import _fetch, util\n"
+                    "_IMP_RE = re.compile(r'@import\\s+(?:url\\()?[\"' + \"'\" + r']?([^\"' + \"'\" + r');\\s]+)[\"' + \"'\" + r']?\\)?', re.I)\n"
+                    "class _StyleRule:\n"
+                    "    def __init__(self, selectorText, props):\n"
+                    "        self.selectorText = selectorText\n"
+                    "        self.style = [types.SimpleNamespace(name=k, value=v) for k, v in props]\n"
+                    "css = types.SimpleNamespace(CSSStyleRule=_StyleRule)\n"
+                    "class CSSParser:\n"
+                    "    def __init__(self, log=None, loglevel=None, raiseExceptions=None, fetcher=None, parseComments=True, validate=True):\n"
+                    "        self._fetcher = fetcher\n"
+                    "    def setFetcher(self, fetcher=None):\n"
+                    "        self._fetcher = fetcher\n"
+                    "    def parseString(self, text, **_kw):\n"
+                    "        rules = []\n"
+                    "        for m in _IMP_RE.finditer(text or ''):\n"
+                    "            _, sub_txt = util._readUrl(m.group(1), fetcher=self._fetcher)\n"
+                    "            if sub_txt:\n"
+                    "                rules.extend(self.parseString(sub_txt))\n"
+                    "        if 'margin-top: 24mm' in (text or ''):\n"
+                    "            rules.append(_StyleRule('.print-format', [('margin-top', '24mm')]))\n"
+                    "        return rules\n"
+                    "    def parseUrl(self, href, **_kw):\n"
+                    "        _, sub_txt = util._readUrl(href, fetcher=self._fetcher)\n"
+                    "        return self.parseString(sub_txt or '')\n"
+                    "    def parseFile(self, filename, **_kw):\n"
+                    "        return open(filename, 'rb').read()\n"
+                    "def parseString(text, **kw):\n"
+                    "    return CSSParser().parseString(text, **kw)\n"
+                    "def parseUrl(href, **kw):\n"
+                    "    return CSSParser().parseUrl(href, **kw)\n"
+                    "def parseFile(filename, **kw):\n"
+                    "    return CSSParser().parseFile(filename, **kw)\n",
+                    encoding="utf-8",
+                )
+                (fake_sp / "pdfkit").mkdir(parents=True)
+                (fake_sp / "pdfkit" / "__init__.py").write_text(
+                    "def from_string(html, *a, **kw):\n    return b'%PDF-1.4\\n%%EOF'\n"
+                    "def from_url(*a, **kw):\n    return b''\n"
+                    "def from_file(*a, **kw):\n    return b''\n",
+                    encoding="utf-8",
+                )
+                (fake_sp / "frappe" / "utils").mkdir(parents=True)
+                (fake_sp / "frappe" / "__init__.py").write_text(
+                    "import os, types\n"
+                    f"local = types.SimpleNamespace(sites_path={str(sites)!r}, site='dev.localhost', request=types.SimpleNamespace(host='dev.localhost'))\n"
+                    "session = types.SimpleNamespace(user='Administrator', sid='sid')\n"
+                    f"get_site_path = lambda *p: os.path.join({str(sites)!r}, 'dev.localhost', *p)\n"
+                    "get_all = lambda *a, **k: []\n"
+                    "has_permission = lambda *a, **k: True\n",
+                    encoding="utf-8",
+                )
+                (fake_sp / "frappe" / "utils" / "__init__.py").write_text(
+                    "get_url = lambda: 'http://dev.localhost'\n",
+                    encoding="utf-8",
+                )
+                # Exact Frappe v15.123.1 (`d2efa796`) pattern calling `read_options_from_html` + `cssutils.parseString(stylesheet)` BEFORE `pdfkit.from_string`
+                (fake_sp / "frappe" / "utils" / "pdf.py").write_text(
+                    "import cssutils, pdfkit\n"
+                    "from bs4 import BeautifulSoup\n"
+                    "_get_base64_image = lambda s: None\n"
+                    "inline_private_images = lambda h: h\n"
+                    "get_cookie_options = lambda: {'cookie-jar': '/tmp/bad.jar'}\n"
+                    "def get_print_format_styles(soup):\n"
+                    "    stylesheet = ''.join((t.string or '') for t in soup.find_all('style'))\n"
+                    "    parsed = cssutils.parseString(stylesheet)\n"
+                    "    out = []\n"
+                    "    for r in parsed:\n"
+                    "        if isinstance(r, cssutils.css.CSSStyleRule) and '.print-format' in r.selectorText:\n"
+                    "            out.extend(r.style)\n"
+                    "    return out\n"
+                    "def read_options_from_html(html):\n"
+                    "    soup = BeautifulSoup(html, 'html.parser')\n"
+                    "    styles = get_print_format_styles(soup)\n"
+                    "    opts = {s.name: s.value for s in styles}\n"
+                    "    return str(soup), opts\n"
+                    "def get_pdf(html):\n"
+                    "    rewritten, opts = read_options_from_html(html)\n"
+                    "    return pdfkit.from_string(rewritten, options=opts), opts, rewritten\n",
+                    encoding="utf-8",
+                )
+
+                sub_py = r"""
+import json, sys, urllib.request
+from crm_cskh.services import pdf_hooks
+
+origin = sys.argv[1]
+pdf_hooks.ensure_pdf_runtime_hooks()
+pre_loaded = {k: (k in sys.modules) for k in ("cssutils", "frappe.utils.pdf", "pdfkit")}
+
+import frappe
+from frappe.utils.pdf import get_pdf
+import cssutils
+
+html = (
+    '<html><head>'
+    f'<link rel="stylesheet" href="{origin}/evil.css">'
+    '<style>'
+    f'@import "{origin}/evil.css"; '
+    f'@import url("{origin}/redirect"); '
+    '@import "file:///etc/passwd"; '
+    '@import "/assets/crm_cskh/css/local-print.css";'
+    '</style></head><body><p>DEV v15.123.1</p></body></html>'
+)
+_, opts, rewritten = get_pdf(html)
+cssutils.parseString(f'@import "{origin}/evil.css"; @import url("{origin}/redirect");')
+
+frappe.local.request.host = origin.split("://", 1)[-1]
+same_site_css = f"{origin}/assets/crm_cskh/css/local-print.css"
+same_site_redir = f"{origin}/redirect"
+custom_calls = []
+def _network_fetcher(u):
+    custom_calls.append(u)
+    with urllib.request.urlopen(u, timeout=5) as r:
+        return ("utf-8", r.read().decode("utf-8", "replace"))
+
+ctor_rules = cssutils.CSSParser(fetcher=_network_fetcher).parseUrl(same_site_css)
+ctor_pos_rules = cssutils.CSSParser(None, None, None, _network_fetcher).parseUrl(same_site_css)
+cssutils.CSSParser(fetcher=_network_fetcher).parseUrl(same_site_redir)
+setter_p = cssutils.CSSParser()
+setter_p.setFetcher(_network_fetcher)
+setter_rules = setter_p.parseUrl(same_site_css)
+setter_p.parseUrl(same_site_redir)
+setter_kw_p = cssutils.CSSParser()
+setter_kw_p.setFetcher(fetcher=_network_fetcher)
+setter_kw_rules = setter_kw_p.parseUrl(same_site_css)
+setter_kw_p.parseUrl(same_site_redir)
+
+parse_file_blocked = False
+try:
+    cssutils.parseFile("/etc/hosts")
+except PermissionError:
+    parse_file_blocked = True
+
+print("DEV_CSS_SSRF_JSON:" + json.dumps({
+    "pre_loaded": pre_loaded,
+    "opts_margin_top": opts.get("margin-top"),
+    "evil_in_rewritten": "/evil.css" in rewritten,
+    "ctor_rules_len": len(ctor_rules),
+    "ctor_pos_rules_len": len(ctor_pos_rules),
+    "setter_rules_len": len(setter_rules),
+    "setter_kw_rules_len": len(setter_kw_rules),
+    "custom_calls": custom_calls,
+    "parse_file_blocked": parse_file_blocked,
+}))
+"""
+                proc = subprocess.run(
+                    [sys.executable, "-c", sub_py, origin],
+                    env={
+                        **os.environ,
+                        "PYTHONPATH": os.pathsep.join(
+                            [
+                                str(fake_sp),
+                                str(REPO_ROOT / "apps" / "crm_cskh"),
+                                os.environ.get("PYTHONPATH", ""),
+                            ]
+                        ),
+                    },
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False,
+                )
+                self.assertEqual(proc.returncode, 0, f"{proc.stderr}\n{proc.stdout}")
+                res = json.loads(
+                    [
+                        ln[len("DEV_CSS_SSRF_JSON:") :]
+                        for ln in proc.stdout.splitlines()
+                        if ln.startswith("DEV_CSS_SSRF_JSON:")
+                    ][-1]
+                )
+                self.assertEqual(
+                    res["pre_loaded"],
+                    {"cssutils": False, "frappe.utils.pdf": False, "pdfkit": False},
+                )
+                self.assertEqual(res["opts_margin_top"], "24mm")
+                self.assertFalse(res["evil_in_rewritten"])
+                self.assertEqual(res["ctor_rules_len"], 1)
+                self.assertEqual(res["ctor_pos_rules_len"], 1)
+                self.assertEqual(res["setter_rules_len"], 1)
+                self.assertEqual(res["setter_kw_rules_len"], 1)
+                self.assertEqual(res["custom_calls"], [])
+                self.assertTrue(res["parse_file_blocked"])
+                self.assertEqual(
+                    hits,
+                    [],
+                    f"Legacy DEV v15.123.1 simulation leaked SSRF/redirect hits: {hits}",
+                )
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+    def test_weasyprint_69_fontconfig_double_free_guard_and_v70_noop(self) -> None:
+        """Verify `IR-B9-NATIVE-CONCURRENT-02` (`Kozea/WeasyPrint#2843`) fixes WeasyPrint < 70 `FcConfig` double-free and no-ops on >= 70."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+
+            def _make_fake_weasyprint(sp_dir: Path, *, buggy_v69: bool) -> None:
+                (sp_dir / "weasyprint" / "text").mkdir(parents=True)
+                (sp_dir / "weasyprint" / "urls.py").write_text(
+                    "class URLFetcher:\n"
+                    "    def __init__(self, fail_on_errors=False, allow_redirects=True, allowed_protocols=None):\n"
+                    "        self.allow_redirects = allow_redirects\n"
+                    "        self.allowed_protocols = allowed_protocols\n"
+                    "class URLFetcherResponse:\n"
+                    "    def __init__(self, url, body=None, headers=None, status=200):\n"
+                    "        self.url = url\n"
+                    "        self.body = body\n",
+                    encoding="utf-8",
+                )
+                config_line = (
+                    "        self._config = ffi.gc(fontconfig.FcInitLoadConfigAndFonts(), fontconfig.FcConfigDestroy)\n"
+                    if buggy_v69
+                    else "        self._config = fontconfig.FcInitLoadConfigAndFonts()\n"
+                )
+                (sp_dir / "weasyprint" / "text" / "fonts.py").write_text(
+                    "import types\n"
+                    "STATE = {'refcount': 0, 'destroyed': 0, 'double_free': False, 'gc_callbacks': []}\n"
+                    "class _FFI:\n"
+                    "    def gc(self, obj, destructor):\n"
+                    "        STATE['gc_callbacks'].append((obj, destructor))\n"
+                    "        return obj\n"
+                    "    def cast(self, _ctype, obj):\n"
+                    "        return obj\n"
+                    "ffi = _FFI()\n"
+                    "def _fc_init():\n"
+                    "    STATE['refcount'] += 1\n"
+                    "    return {'kind': 'FcConfig'}\n"
+                    "def _fc_destroy(_cfg):\n"
+                    "    STATE['refcount'] -= 1\n"
+                    "    if STATE['refcount'] == 0:\n"
+                    "        STATE['destroyed'] += 1\n"
+                    "    elif STATE['refcount'] < 0:\n"
+                    "        STATE['double_free'] = True\n"
+                    "fontconfig = types.SimpleNamespace(FcInitLoadConfigAndFonts=_fc_init, FcConfigDestroy=_fc_destroy)\n"
+                    "pangoft2 = types.SimpleNamespace(\n"
+                    "    pango_ft2_font_map_new=lambda: {'kind': 'FontMap', 'cfg': None},\n"
+                    "    pango_fc_font_map_set_config=lambda fm, cfg: (fm.__setitem__('cfg', cfg), STATE.__setitem__('refcount', STATE['refcount'] + 1)),\n"
+                    ")\n"
+                    "gobject = types.SimpleNamespace(g_object_unref=lambda fm: _fc_destroy(fm['cfg']))\n"
+                    "class FontConfiguration:\n"
+                    "    def __init__(self):\n"
+                    + config_line
+                    + "        self.font_map = ffi.gc(pangoft2.pango_ft2_font_map_new(), gobject.g_object_unref)\n"
+                    "        pangoft2.pango_fc_font_map_set_config(ffi.cast('PangoFcFontMap *', self.font_map), self._config)\n"
+                    "        fontconfig.FcConfigDestroy(self._config)\n"
+                    "        self._folder = None\n"
+                    "        self.strut_layouts = {}\n"
+                    "        self.font_features = {}\n",
+                    encoding="utf-8",
+                )
+                (sp_dir / "weasyprint" / "__init__.py").write_text(
+                    f"__version__ = {'69.0' if buggy_v69 else '70.0'!r}\n"
+                    "class HTML:\n"
+                    "    def __init__(self, **kwargs):\n"
+                    "        self.kwargs = kwargs\n"
+                    "class CSS:\n"
+                    "    def __init__(self, **kwargs):\n"
+                    "        self.kwargs = kwargs\n",
+                    encoding="utf-8",
+                )
+                (sp_dir / "frappe" / "utils").mkdir(parents=True)
+                (sp_dir / "frappe" / "__init__.py").write_text(
+                    "import types\n"
+                    "local = types.SimpleNamespace(sites_path='.', site='fc.localhost', request=None)\n"
+                    "session = types.SimpleNamespace(user='Administrator', sid='sid')\n"
+                    "get_site_path = lambda *p: '/'.join(('sites', 'fc.localhost', *p))\n"
+                    "get_all = lambda *a, **k: []\n"
+                    "has_permission = lambda *a, **k: True\n",
+                    encoding="utf-8",
+                )
+                (sp_dir / "frappe" / "utils" / "__init__.py").write_text(
+                    "get_url = lambda: 'http://fc.localhost'\n",
+                    encoding="utf-8",
+                )
+
+            probe_py = r"""
+import json, sys
+use_hooks = sys.argv[1] == "1"
+if use_hooks:
+    from crm_cskh.services import pdf_hooks
+    pdf_hooks.ensure_pdf_runtime_hooks()
+    eager_fonts = "weasyprint.text.fonts" in sys.modules
+else:
+    eager_fonts = False
+
+import weasyprint
+from weasyprint.text import fonts as wp_fonts
+
+fc = wp_fonts.FontConfiguration()
+attrs_ok = (fc._folder is None and fc.strut_layouts == {} and fc.font_features == {})
+for obj, dtor in list(wp_fonts.STATE["gc_callbacks"]):
+    dtor(obj)
+
+print("FC_GUARD_JSON:" + json.dumps({
+    "eager_fonts": eager_fonts,
+    "patched": bool(getattr(wp_fonts.FontConfiguration.__init__, "_cskh_fc_double_free_fixed", False)),
+    "attrs_ok": attrs_ok,
+    "refcount": wp_fonts.STATE["refcount"],
+    "destroyed": wp_fonts.STATE["destroyed"],
+    "double_free": wp_fonts.STATE["double_free"],
+}))
+"""
+
+            def _run_case(sp_dir: Path, *, use_hooks: bool) -> dict:
+                proc = subprocess.run(
+                    [sys.executable, "-c", probe_py, "1" if use_hooks else "0"],
+                    env={
+                        **os.environ,
+                        "PYTHONPATH": os.pathsep.join(
+                            [
+                                str(sp_dir),
+                                str(REPO_ROOT / "apps" / "crm_cskh"),
+                                os.environ.get("PYTHONPATH", ""),
+                            ]
+                        ),
+                    },
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False,
+                )
+                self.assertEqual(proc.returncode, 0, f"{proc.stderr}\n{proc.stdout}")
+                return json.loads(
+                    [
+                        ln[len("FC_GUARD_JSON:") :]
+                        for ln in proc.stdout.splitlines()
+                        if ln.startswith("FC_GUARD_JSON:")
+                    ][-1]
+                )
+
+            sp_v69 = root / "sp_v69"
+            sp_v70 = root / "sp_v70"
+            _make_fake_weasyprint(sp_v69, buggy_v69=True)
+            _make_fake_weasyprint(sp_v70, buggy_v69=False)
+
+            unpatched_v69 = _run_case(sp_v69, use_hooks=False)
+            self.assertFalse(unpatched_v69["patched"])
+            self.assertTrue(unpatched_v69["double_free"])
+            self.assertEqual(unpatched_v69["refcount"], -1)
+
+            guarded_v69 = _run_case(sp_v69, use_hooks=True)
+            self.assertFalse(guarded_v69["eager_fonts"])
+            self.assertTrue(guarded_v69["patched"])
+            self.assertTrue(guarded_v69["attrs_ok"])
+            self.assertFalse(guarded_v69["double_free"])
+            self.assertEqual(guarded_v69["refcount"], 0)
+            self.assertEqual(guarded_v69["destroyed"], 1)
+
+            guarded_v70 = _run_case(sp_v70, use_hooks=True)
+            self.assertFalse(guarded_v70["eager_fonts"])
+            self.assertFalse(guarded_v70["patched"])
+            self.assertTrue(guarded_v70["attrs_ok"])
+            self.assertFalse(guarded_v70["double_free"])
+            self.assertEqual(guarded_v70["refcount"], 0)
+            self.assertEqual(guarded_v70["destroyed"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
