@@ -76,7 +76,7 @@ class TestUiP3PagesAndContext(P2TestCase):
 		self.assertTrue(ctx.cskh_capabilities["can_export_report"])
 
 		nav_keys = {item["key"] for item in ctx.cskh_navigation}
-		self.assertEqual(nav_keys, {"my-customers", "callbacks", "progress", "scorecard"})
+		self.assertEqual(nav_keys, {"my-customers", "callbacks", "progress"})
 
 		for denied_mod in (
 			quality_overview_page,
@@ -92,8 +92,8 @@ class TestUiP3PagesAndContext(P2TestCase):
 		frappe.set_user(self.leader_a)
 		for allowed_mod in ALL_P3_PAGES:
 			page_ctx = allowed_mod.get_context(self._fresh_ctx())
-			self.assertTrue(page_ctx.cskh_capabilities["can_waive_sla"])
-			self.assertTrue(page_ctx.cskh_capabilities["can_recompute_kpi"])
+			self.assertFalse(page_ctx.cskh_capabilities["can_waive_sla"])
+			self.assertFalse(page_ctx.cskh_capabilities["can_recompute_kpi"])
 
 	def test_bod_accesses_five_management_p3_pages_with_zero_pii_and_denied_scorecard(self):
 		frappe.set_user(self.bod_user)
@@ -119,7 +119,10 @@ class TestUiP3PagesAndContext(P2TestCase):
 			page_ctx = mod.get_context(self._fresh_ctx())
 			self.assertTrue(page_ctx.cskh_capabilities["can_recompute_kpi"])
 			self.assertTrue(page_ctx.cskh_capabilities["can_waive_sla"])
-			self.assertEqual(len(page_ctx.cskh_p3_subnav), 6)
+			self.assertEqual(len(page_ctx.cskh_p3_subnav), 0)
+			with mock.patch.dict(frappe.conf, {"cskh_show_p3_nav": True}):
+				opt_in_ctx = mod.get_context(self._fresh_ctx())
+				self.assertEqual(len(opt_in_ctx.cskh_p3_subnav), 6)
 
 	def test_p3_feature_flag_rollback_hides_p3_nav_and_blocks_p3_routes_cleanly(self):
 		frappe.set_user(self.admin_user)

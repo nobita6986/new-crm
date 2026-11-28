@@ -84,7 +84,7 @@ class TestUiP2PagesAndContext(P2TestCase):
 		self.assertNotIn("callbacks", nav_keys)
 		self.assertNotIn("import", nav_keys)
 		self.assertIn("progress", nav_keys)
-		self.assertIn("settings", nav_keys)
+		self.assertNotIn("settings", nav_keys)
 		self.assertFalse(ctx.cskh_capabilities["pii"])
 		self.assertFalse(ctx.cskh_capabilities["can_manage_settings"])
 
@@ -103,7 +103,7 @@ class TestUiP2PagesAndContext(P2TestCase):
 		frappe.set_user(self.leader_a)
 		leader_ctx = settings_page.get_context(self._fresh_ctx())
 		self.assertFalse(leader_ctx.cskh_capabilities["can_manage_settings"])
-		self.assertTrue(leader_ctx.cskh_capabilities["can_review_correction"])
+		self.assertFalse(leader_ctx.cskh_capabilities["can_review_correction"])
 		work_item_page.get_context(self._fresh_ctx())
 		callbacks_page.get_context(self._fresh_ctx())
 
