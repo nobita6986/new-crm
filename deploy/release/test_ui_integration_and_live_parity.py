@@ -82,9 +82,11 @@ class TestUiIntegrationAndLiveParity(unittest.TestCase):
             shell_html.index("/assets/crm_cskh/cskh/cskh.css"),
             shell_html.index("{% block page_content %}"),
         )
-        # 2fd88d3: modern left sidebar & mobile nav toggle
+        # 2fd88d3: modern left sidebar & mobile nav toggle; top Frappe website navbar suppressed
+        self.assertIn("{% block navbar %}{% endblock %}", shell_html)
         self.assertIn('class="cskh-sidebar"', shell_html)
         self.assertIn('id="cskh-mobile-nav-toggle"', shell_html)
+        self.assertIn('id="cskh-logout-btn"', shell_html)
         # Preserve P4 G18 role-shareable SSR skeleton sentinels (`cskh_renderer.py`)
         for sentinel_expr in (
             "cskh_user_html",

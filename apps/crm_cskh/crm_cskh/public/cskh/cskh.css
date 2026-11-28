@@ -53,48 +53,11 @@ body:has(#cskh-root) {
 	-moz-osx-font-smoothing: grayscale;
 }
 
-body:has(#cskh-root) .navbar {
-	position: relative;
-	z-index: var(--cskh-z-navbar);
-	overflow: visible;
-	background: rgba(255, 255, 255, 0.84) !important;
-	backdrop-filter: blur(12px);
-	-webkit-backdrop-filter: blur(12px);
-	border-bottom: 1px solid rgba(226, 232, 240, 0.88) !important;
-	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025);
-	padding-top: 8px;
-	padding-bottom: 8px;
-}
-
-body:has(#cskh-root) .navbar .container,
-body:has(#cskh-root) .navbar .navbar-collapse,
-body:has(#cskh-root) .navbar .navbar-nav,
-body:has(#cskh-root) .navbar .nav-item.dropdown {
-	overflow: visible;
-}
-
-body:has(#cskh-root) .navbar .dropdown-menu {
-	z-index: var(--cskh-z-dropdown);
-	overflow: visible;
-}
-
-@media (max-width: 991.98px) {
-	body:has(#cskh-root) .navbar .navbar-nav .nav-item.dropdown {
-		height: auto;
-		min-height: var(--navbar-height, 48px);
-		flex-wrap: wrap;
-	}
-
-	body:has(#cskh-root) .navbar .navbar-nav .dropdown-menu {
-		flex-basis: 100%;
-		margin-top: 6px;
-	}
-}
-
-body:has(#cskh-root) .navbar .container {
-	max-width: 1520px;
-	padding-left: 24px;
-	padding-right: 24px;
+body:has(#cskh-root) > .navbar,
+body:has(#cskh-root) .navbar,
+body:has(#cskh-root) .page-breadcrumbs,
+body:has(#cskh-root) .page-header-wrapper {
+	display: none !important;
 }
 
 body:has(#cskh-root) main.container,
@@ -104,6 +67,7 @@ body:has(#cskh-root) .container:has(#cskh-root) {
 	width: 100% !important;
 	margin-top: 0 !important;
 	margin-bottom: 0 !important;
+	padding-top: 0 !important;
 	padding-left: 0 !important;
 	padding-right: 0 !important;
 }
@@ -123,7 +87,7 @@ body:has(#cskh-root) .web-footer {
 .cskh-shell {
 	max-width: 1520px;
 	margin: 0 auto;
-	padding: 22px 24px 64px;
+	padding: 12px 20px 48px;
 	color: var(--cskh-text);
 	font-family: var(--cskh-font);
 	display: grid;
@@ -141,9 +105,9 @@ body:has(#cskh-root) .web-footer {
 
 .cskh-sidebar {
 	position: sticky;
-	top: 72px;
+	top: 12px;
 	z-index: var(--cskh-z-sidebar);
-	max-height: calc(100vh - 88px);
+	max-height: calc(100vh - 24px);
 	overflow-y: auto;
 	scrollbar-width: thin;
 	scrollbar-color: #cbd5e1 transparent;
@@ -443,6 +407,21 @@ body:has(#cskh-root) .web-footer {
 	background: #e0e7ff;
 	border-color: var(--cskh-primary-border);
 	color: var(--cskh-primary-hover);
+}
+
+.cskh-session-link.is-logout {
+	margin-left: auto;
+	cursor: pointer;
+	font-family: inherit;
+	color: var(--cskh-text-secondary);
+	background: #ffffff;
+	border-color: var(--cskh-border);
+}
+
+.cskh-session-link.is-logout:hover {
+	color: var(--cskh-danger);
+	background: #fff1f2;
+	border-color: #fecdd3;
 }
 
 /* ========================================================================== */

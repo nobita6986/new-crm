@@ -154,6 +154,7 @@ TRANSLATIONS = {
 	"Interviews to confirm by end of day": "Lịch phỏng vấn KCN cần chốt kết quả cuối ngày",
 	"Invalid": "Sai định dạng",
 	"Invalid Vietnamese mobile phone number.": "Số điện thoại di động Việt Nam không hợp lệ.",
+	"Log out": "Đăng xuất",
 	"Logged today": "Đã điểm công hôm nay",
 	"Logged workday": "Đã ghi nhận ngày công",
 	"Lost / renewing": "Mất / đang làm lại CCCD",
