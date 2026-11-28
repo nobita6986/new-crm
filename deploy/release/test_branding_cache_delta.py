@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import ast
+import datetime as dt
+import hashlib
 import importlib.util
 import json
+import re
 import sys
 import types
 import unittest
 from collections import deque
 from contextlib import contextmanager
 from copy import deepcopy
+from html.parser import HTMLParser
 from pathlib import Path
 from unittest import mock
 
@@ -274,16 +279,318 @@ class BrandingSmokeDiagnosticsTests(unittest.TestCase):
             )
         exc_text = str(caught.exception)
         rendered_log = logger.render()
-        for leak in (secret_tok, raw_sid):
+        for leak in (secret_tok, raw_sid, "sid=", "k="):
             self.assertNotIn(leak, exc_text)
             self.assertNotIn(leak, rendered_log)
         detail = json.loads(exc_text.split(": ", 1)[1])
         self.assertEqual(detail["reload_index"], 5)
         self.assertEqual(detail["http_status"], 200)
-        self.assertEqual(
-            detail["actual_icon_hrefs"],
-            ["/bad.svg?sid=<REDACTED_SID>&k=<REDACTED_ADMIN_PASSWORD>"],
+        self.assertEqual(len(detail["actual_icon_hrefs"]), 1)
+        self.assertRegex(
+            detail["actual_icon_hrefs"][0],
+            r"^/bad\.svg\?<REDACTED_QUERY:sha256=[0-9a-f]{12}>$",
         )
+        v1_safe = logger.sanitize_url("/assets/crm_cskh/cskh/logo.svg?fav=smoke-v1")
+        v2_safe = logger.sanitize_url("/assets/crm_cskh/cskh/logo.svg?fav=smoke-v2")
+        self.assertTrue(
+            v1_safe.startswith("/assets/crm_cskh/cskh/logo.svg?<REDACTED_QUERY:sha256=")
+        )
+        self.assertNotEqual(v1_safe, v2_safe)
+
+    def test_signed_urls_userinfo_fragments_and_data_uris_are_redacted_across_fields(
+        self,
+    ):
+        logger = self.smoke.SmokeLogger()
+        signed_expected = (
+            "https://exp-user:exp-pass@cdn.example.invalid/brand/expected.svg"
+            "?X-Amz-Credential=SYNTHETIC_EXP_CRED"
+            "&X-Amz-Signature=SYNTHETIC_EXP_SIG#exp_frag=SYNTHETIC_EXP_FRAG"
+        )
+        signed_actual = (
+            "https://dummy-user:dummy-pass@assets.example.invalid:8443/icon.svg"
+            "?X-Amz-Credential=SYNTHETIC_CREDENTIAL"
+            "&X-Amz-Signature=SYNTHETIC_SIGNATURE"
+            "&access_token=SYNTHETIC_TOKEN#frag_tok=SYNTHETIC_FRAGMENT"
+        )
+        proto_rel_actual = (
+            "//proto-user:proto-pass@static.example.invalid"
+            "/t/0123456789abcdef0123456789abcdef/icon.svg;jsessionid=SYNTHETIC_JSESS"
+            "?sig=SYNTHETIC_PROTO_SIG"
+        )
+        data_svg = 'data:image/svg+xml,<svg width="16">SYNTHETIC_PRIVATE_CONTENT</svg>'
+        data_png = "data:image/png;base64,SYNTHETIC_BASE64_PAYLOAD"
+        schemeless_cred = "bare-user:bare-pass@assets.example.invalid/icon.svg"
+        js_uri = "javascript:alert('SYNTHETIC_JS_PAYLOAD')"
+        body = (
+            f'<link rel="icon" href="{signed_actual}">'
+            f'<link rel="icon" href="{proto_rel_actual}">'
+            f"<link rel='icon' href='{data_svg}'>"
+            f'<link rel="icon" href="{data_png}">'
+            f'<link rel="icon" href="{schemeless_cred}">'
+            f'<link rel="icon" href="{js_uri}">'
+        )
+        with self.assertRaises(AssertionError) as caught:
+            self.smoke.check_crm_branding_reload(
+                200,
+                body,
+                phase="v2",
+                reload_index=4,
+                favicon=signed_expected,
+                logo="/expected-logo.svg",
+                logger=logger,
+            )
+        exc_text = str(caught.exception)
+        rendered_log = logger.render()
+        forbidden = (
+            "exp-user",
+            "exp-pass",
+            "SYNTHETIC_EXP_CRED",
+            "SYNTHETIC_EXP_SIG",
+            "SYNTHETIC_EXP_FRAG",
+            "dummy-user",
+            "dummy-pass",
+            "SYNTHETIC_CREDENTIAL",
+            "SYNTHETIC_SIGNATURE",
+            "SYNTHETIC_TOKEN",
+            "SYNTHETIC_FRAGMENT",
+            "proto-user",
+            "proto-pass",
+            "0123456789abcdef0123456789abcdef",
+            "SYNTHETIC_JSESS",
+            "SYNTHETIC_PROTO_SIG",
+            "SYNTHETIC_PRIVATE_CONTENT",
+            "SYNTHETIC_BASE64_PAYLOAD",
+            "bare-user",
+            "bare-pass",
+            "SYNTHETIC_JS_PAYLOAD",
+            "X-Amz-Credential",
+            "X-Amz-Signature",
+            "access_token",
+        )
+        for secret_piece in forbidden:
+            self.assertNotIn(secret_piece, exc_text)
+            self.assertNotIn(secret_piece, rendered_log)
+
+        detail = json.loads(exc_text.split(": ", 1)[1])
+        self.assertRegex(
+            detail["expected_icon_href"],
+            r"^https://cdn\.example\.invalid/brand/expected\.svg"
+            r"\?<REDACTED_QUERY:sha256=[0-9a-f]{12}>"
+            r"#<REDACTED_FRAGMENT:sha256=[0-9a-f]{12}>$",
+        )
+        self.assertRegex(
+            detail["actual_icon_hrefs"][0],
+            r"^https://assets\.example\.invalid:8443/icon\.svg"
+            r"\?<REDACTED_QUERY:sha256=[0-9a-f]{12}>"
+            r"#<REDACTED_FRAGMENT:sha256=[0-9a-f]{12}>$",
+        )
+        self.assertRegex(
+            detail["actual_icon_hrefs"][1],
+            r"^//static\.example\.invalid/t/<REDACTED_SEGMENT>/icon\.svg;<REDACTED_PARAM>"
+            r"\?<REDACTED_QUERY:sha256=[0-9a-f]{12}>$",
+        )
+        self.assertRegex(
+            detail["actual_icon_hrefs"][2],
+            r"^data:image/svg\+xml;<REDACTED_DATA:sha256=[0-9a-f]{12}>$",
+        )
+        self.assertRegex(
+            detail["actual_icon_hrefs"][3],
+            r"^data:image/png;<REDACTED_DATA:sha256=[0-9a-f]{12}>$",
+        )
+        self.assertEqual(detail["actual_icon_hrefs"][4], "<UNSUPPORTED_SCHEME_URL>")
+        self.assertRegex(
+            detail["actual_icon_hrefs"][5],
+            r"^javascript:<REDACTED_PAYLOAD:sha256=[0-9a-f]{12}>$",
+        )
+        for item in [detail["expected_icon_href"], *detail["actual_icon_hrefs"]]:
+            self.assertLessEqual(len(item), 256)
+
+        err_logger = self.smoke.SmokeLogger()
+        transport_msg = (
+            f"URLError: upstream {signed_actual} Bearer SYNTHETIC_BEARER "
+            'body={"favicon": "data:image/svg+xml,<svg width=\\"16\\">'
+            'SYNTHETIC_ERR_SVG</svg>"} X-Amz-Signature=SYNTHETIC_RAW_SIG'
+        )
+        with self.assertRaises(AssertionError) as err_caught:
+            self.smoke.check_crm_branding_reload(
+                None,
+                "",
+                phase="v1",
+                reload_index=2,
+                favicon=data_svg,
+                logo="/expected-logo.svg",
+                logger=err_logger,
+                transport_error=transport_msg,
+            )
+        err_exc = str(err_caught.exception)
+        err_log = err_logger.render()
+        for leak in (
+            "dummy-user",
+            "dummy-pass",
+            "SYNTHETIC_CREDENTIAL",
+            "SYNTHETIC_SIGNATURE",
+            "SYNTHETIC_TOKEN",
+            "SYNTHETIC_BEARER",
+            "SYNTHETIC_ERR_SVG",
+            "SYNTHETIC_RAW_SIG",
+            "SYNTHETIC_PRIVATE_CONTENT",
+        ):
+            self.assertNotIn(leak, err_exc)
+            self.assertNotIn(leak, err_log)
+        err_detail = json.loads(err_exc.split(": ", 1)[1])
+        self.assertEqual(err_detail["failures"], ["http_transport_error"])
+        self.assertRegex(
+            err_detail["expected_icon_href"],
+            r"^data:image/svg\+xml;<REDACTED_DATA:sha256=[0-9a-f]{12}>$",
+        )
+        self.assertLessEqual(len(err_detail["error"]), 320)
+
+    def test_malformed_html_on_http_503_preserves_status_and_primary_error(self):
+        logger = self.smoke.SmokeLogger()
+        malformed_503 = (
+            "<![bogus]>"
+            '<link rel="icon" href="https://u503:p503@assets.example.invalid/default.svg'
+            '?X-Amz-Signature=SYNTHETIC_503_SIG">'
+        )
+        with self.assertRaises(AssertionError) as caught:
+            self.smoke.check_crm_branding_reload(
+                503,
+                malformed_503,
+                phase="v1",
+                reload_index=2,
+                favicon=BRAND["favicon"],
+                logo=BRAND["splash_image"],
+                logger=logger,
+                require_prepaint=True,
+            )
+        exc_text = str(caught.exception)
+        rendered_log = logger.render()
+        self.assertTrue(exc_text.startswith("CRM branding reload failed: "), exc_text)
+        self.assertIn("before branding reset", rendered_log)
+        for leak in ("u503", "p503", "SYNTHETIC_503_SIG", "X-Amz-Signature"):
+            self.assertNotIn(leak, exc_text)
+            self.assertNotIn(leak, rendered_log)
+        detail = json.loads(exc_text.split(": ", 1)[1])
+        self.assertEqual(detail["phase"], "v1")
+        self.assertEqual(detail["reload_index"], 2)
+        self.assertEqual(detail["http_status"], 503)
+        self.assertIn("http_status", detail["failures"])
+        self.assertIn("HTTP 503", detail["error"])
+        self.assertEqual(detail["icon_parse_error"], "AssertionError")
+        self.assertEqual(len(detail["actual_icon_hrefs"]), 1)
+        self.assertRegex(
+            detail["actual_icon_hrefs"][0],
+            r"^https://assets\.example\.invalid/default\.svg"
+            r"\?<REDACTED_QUERY:sha256=[0-9a-f]{12}>$",
+        )
+
+        mid_detail = self.check(
+            503,
+            '<link rel="icon" href="/first.svg"><![bogus]><link rel="icon" href="/second.svg">',
+        )
+        self.assertEqual(mid_detail["http_status"], 503)
+        self.assertEqual(mid_detail["actual_icon_hrefs"], ["/first.svg", "/second.svg"])
+        self.assertEqual(mid_detail["icon_parse_error"], "AssertionError")
+
+        eof_detail = self.check(
+            503, '<link rel="icon" href="/eof.svg"><![CDATA[unterminated'
+        )
+        self.assertEqual(eof_detail["http_status"], 503)
+        self.assertEqual(eof_detail["actual_icon_hrefs"], ["/eof.svg"])
+
+        many_icons = "<![bogus]>" + "".join(
+            f'<link rel="icon" href="/ico-{idx}.svg">' for idx in range(12)
+        )
+        many_detail = self.check(503, many_icons)
+        self.assertEqual(many_detail["http_status"], 503)
+        self.assertEqual(len(many_detail["actual_icon_hrefs"]), 10)
+        self.assertTrue(many_detail["actual_icon_hrefs_truncated"])
+        self.assertEqual(many_detail["icon_parse_error"], "AssertionError")
+
+    def test_ast_isolated_smoke_functions_satisfy_independent_probe_harness(self):
+        source = SMOKE_PATH.read_text(encoding="utf-8")
+        root = ast.parse(source)
+        selected = [
+            node
+            for node in root.body
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef))
+            and node.name in ("SmokeLogger", "check_crm_branding_reload")
+        ]
+        module = ast.Module(
+            body=[
+                ast.ImportFrom(
+                    module="__future__",
+                    names=[ast.alias(name="annotations")],
+                    level=0,
+                ),
+                *selected,
+            ],
+            type_ignores=[],
+        )
+        ns = {
+            "dt": dt,
+            "hashlib": hashlib,
+            "json": json,
+            "re": re,
+            "HTMLParser": HTMLParser,
+        }
+        exec(compile(ast.fix_missing_locations(module), "<ast_probe>", "exec"), ns)
+
+        probes = [
+            (
+                "signed_url",
+                200,
+                '<link rel="icon" href="https://dummy-user:dummy-pass@assets.example.invalid'
+                "/icon.svg?X-Amz-Credential=SYNTHETIC_CREDENTIAL"
+                '&X-Amz-Signature=SYNTHETIC_SIGNATURE&access_token=SYNTHETIC_TOKEN">',
+            ),
+            (
+                "data_uri_content",
+                200,
+                '<link rel="icon" href="data:image/svg+xml,&lt;svg&gt;'
+                'SYNTHETIC_PRIVATE_CONTENT&lt;/svg&gt;">',
+            ),
+            (
+                "malformed_declaration",
+                503,
+                '<![bogus]><link rel="icon" href="/default.svg">',
+            ),
+        ]
+        for name, st, html_body in probes:
+            with self.subTest(probe=name):
+                probe_logger = ns["SmokeLogger"]()
+                with self.assertRaises(AssertionError) as caught:
+                    ns["check_crm_branding_reload"](
+                        st,
+                        html_body,
+                        phase="v1",
+                        reload_index=1,
+                        favicon="/expected.svg",
+                        logo="/expected-logo.svg",
+                        logger=probe_logger,
+                    )
+                exc_str = str(caught.exception)
+                log_str = probe_logger.render()
+                self.assertTrue(
+                    exc_str.startswith("CRM branding reload failed: "), exc_str
+                )
+                self.assertIn("before branding reset", log_str)
+                for leak in (
+                    "dummy-user",
+                    "dummy-pass",
+                    "SYNTHETIC_CREDENTIAL",
+                    "SYNTHETIC_SIGNATURE",
+                    "SYNTHETIC_TOKEN",
+                    "SYNTHETIC_PRIVATE_CONTENT",
+                ):
+                    self.assertNotIn(leak, exc_str)
+                    self.assertNotIn(leak, log_str)
+                parsed = json.loads(exc_str.split(": ", 1)[1])
+                self.assertEqual(parsed["http_status"], st)
+                if name == "malformed_declaration":
+                    self.assertEqual(parsed["http_status"], 503)
+                    self.assertEqual(parsed["actual_icon_hrefs"], ["/default.svg"])
+                    self.assertEqual(parsed["icon_parse_error"], "AssertionError")
 
     def test_prepaint_and_previous_logo_checks_remain_strict(self):
         body = f'<link rel="icon" href="{BRAND["favicon"]}">{BRAND["splash_image"]}'
@@ -337,7 +644,12 @@ class BrandingSmokeDiagnosticsTests(unittest.TestCase):
                     resets.append(logger.render())
                 return 200, {}, "{}"
             if path == "/crm/leads":
-                return 503, {}, '<link rel="icon" href="/old.svg">'
+                return (
+                    503,
+                    {},
+                    '<![bogus]><link rel="icon" href="/old.svg">'
+                    '<link rel="icon" href="data:image/svg+xml,<svg>SYNTHETIC_503_SVG</svg>">',
+                )
             self.fail(f"Unexpected smoke request: {path}")
 
         with (
@@ -370,9 +682,112 @@ class BrandingSmokeDiagnosticsTests(unittest.TestCase):
             )
         self.assertEqual(len(resets), 1)
         self.assertIn('"reload_index": 1', resets[0])
-        self.assertIn('"actual_icon_hrefs": ["/old.svg"]', resets[0])
+        self.assertIn('"/old.svg"', resets[0])
+        self.assertIn('"icon_parse_error": "AssertionError"', resets[0])
+        self.assertNotIn("SYNTHETIC_503_SVG", resets[0])
         self.assertIn('"prepaint_marker_present": false', resets[0])
         self.assertIn("before branding reset", resets[0])
+
+    def test_set_branding_failure_sanitizes_fallback_and_reset_diagnostics(self):
+        logger = self.smoke.SmokeLogger()
+        guest, authenticated = object(), object()
+        sid = "synthetic-session-for-fallback-sanitize"
+        csrf = "11223344556677889900aabbccddeeff"
+        jar = [types.SimpleNamespace(name="sid", value=sid)]
+        shell = (
+            '<head>/assets/crm_cskh/cskh/cskh.css</head> class="cskh-sidebar" '
+            f'Asia/Ho_Chi_Minh Tổng quan Chất lượng "X-Frappe-CSRF-Token": "{csrf}"'
+        )
+        set_calls = []
+
+        def http(opener, url, site, method="GET", data=None, headers=None):
+            path = self.smoke.urllib.parse.urlsplit(url).path
+            if opener is guest:
+                return 403, {}, ""
+            if path == "/api/method/frappe.auth.get_logged_user":
+                return 200, {}, "Administrator"
+            if path.startswith("/cskh/"):
+                return 200, {}, shell
+            if path == "/crm":
+                return 200, {}, 'data-cskh-crm-theme="1" crm-sidebar-bridge.js'
+            if path == "/api/method/crm_cskh.api.p3_reporting.request_recompute":
+                return 400, {}, ""
+            if path == "/api/method/crm_cskh.api.health.ping":
+                return (
+                    (200, {}, '{"message":{"app":"crm_cskh"}}')
+                    if (headers or {}).get("X-Frappe-CSRF-Token") == csrf
+                    else (400, {}, "")
+                )
+            if path == "/api/method/frappe.client.set_value":
+                set_calls.append(json.loads(data)["fieldname"]["favicon"])
+                if len(set_calls) == 1:
+                    return (
+                        500,
+                        {},
+                        "https://u1:p1@assets.example.invalid/logo.svg"
+                        "?X-Amz-Signature=SYNTHETIC_SET_SIG "
+                        '"data:image/svg+xml,<svg>SYNTHETIC_SET_SVG</svg>"',
+                    )
+                return (
+                    502,
+                    {},
+                    "reset https://u2:p2@assets.example.invalid/reset.svg"
+                    "?access_token=SYNTHETIC_RESET_TOK",
+                )
+            self.fail(f"Unexpected smoke request: {path}")
+
+        with (
+            mock.patch.object(self.smoke, "wait_for_ingress_ping"),
+            mock.patch.object(
+                self.smoke,
+                "make_http_client",
+                side_effect=[([], guest), (jar, authenticated)],
+            ),
+            mock.patch.object(
+                self.smoke,
+                "http_call_with_cookies",
+                return_value=(
+                    200,
+                    {},
+                    [f"sid={sid}; HttpOnly; Path=/; SameSite=Lax"],
+                    "{}",
+                ),
+            ),
+            mock.patch.object(self.smoke, "http_call", side_effect=http),
+            self.assertRaises(AssertionError) as caught,
+        ):
+            self.smoke.run_http_and_socketio_smoke(
+                "unused-project",
+                Path("unused.env"),
+                18080,
+                "synthetic.localhost",
+                "unused",
+                logger,
+            )
+
+        exc_msg = str(caught.exception)
+        rendered = logger.render()
+        self.assertIn("Branding update failed (500):", exc_msg)
+        self.assertIn("CRM branding smoke failed before branding reset:", rendered)
+        self.assertIn(
+            "CRM branding reset in finally failed after primary error:", rendered
+        )
+        self.assertIn(
+            '"expected_icon_href": "/assets/crm_cskh/cskh/logo.svg?<REDACTED_QUERY:sha256=',
+            rendered,
+        )
+        for leak in (
+            "u1",
+            "p1",
+            "u2",
+            "p2",
+            "SYNTHETIC_SET_SIG",
+            "SYNTHETIC_SET_SVG",
+            "SYNTHETIC_RESET_TOK",
+            "fav=smoke-v1",
+        ):
+            self.assertNotIn(leak, exc_msg)
+            self.assertNotIn(leak, rendered)
 
     def test_secondary_reset_failure_does_not_mask_primary_transport_or_favicon_error(
         self,
