@@ -1,0 +1,148 @@
+{
+  "schema_version": "cskh-t0-t1c-integrated-review-v1",
+  "observed_at_utc": "2026-11-28T04:42:00+00:00",
+  "pr21_independent_review": {
+    "finding_id": "F-P4-LEGACY-DEV-PDF-CSS-SSRF-01",
+    "branch": "codex/fix-dev-pdf-css-ssrf",
+    "pull_request": "https://github.com/nobita6986/new-crm/pull/21",
+    "state": "MERGED",
+    "merged_at_utc": "2026-11-28T03:53:43Z",
+    "reviewed_head": "b67565d5f55d403c981f5fcc7a628c06bc887db2",
+    "status": "PASS_INTEGRATED",
+    "closed_review_items": [
+      "IR-B9-MARGIN-01",
+      "IR-B9-NATIVE-CONCURRENT-02",
+      "IR-B9-RETAINED-LINK-03",
+      "IR-B9-CUSTOM-FETCHER-04"
+    ],
+    "ci_runs": {
+      "p3": {
+        "run_id": 46100241039,
+        "job_id": 140840799034,
+        "conclusion": "success",
+        "backend_passed": 57,
+        "backend_total": 57,
+        "ui_passed": 7,
+        "ui_total": 7,
+        "http_passed": 84,
+        "http_total": 84,
+        "skipped": 0
+      },
+      "p4_02_pr": {
+        "run_id": 46100244621,
+        "conclusion": "success",
+        "jobs_passed": 4,
+        "jobs_total": 4
+      },
+      "concurrent_cold_stress": {
+        "run_id": 46099282908,
+        "conclusion": "success",
+        "subprocesses_passed": 360,
+        "subprocesses_total": 360,
+        "sigsegv_count": 0
+      }
+    }
+  },
+  "integrated_pr20_head": {
+    "pull_request": "https://github.com/nobita6986/new-crm/pull/20",
+    "branch": "codex/p4-t1b-trial-g04-mariadb1189-nochromium",
+    "base_head": "4562ecb6b7e7eec3aae7ddf0e48632d899cf09a4",
+    "head_sha": "c52d2cac4ee20474be2679bfd5441cc39541c772",
+    "apps_tree_sha": "07f25a203cb14e8b39b1f820b6c091083eb8d910",
+    "crm_cskh_tree_sha": "2e61dd455c102d0055c12aae40285550d192bef4",
+    "merge_state_status": "CLEAN",
+    "mergeable": "MERGEABLE",
+    "is_draft": true,
+    "includes_branches": [
+      "codex/fix-dev-pdf-css-ssrf@b67565d5f55d403c981f5fcc7a628c06bc887db2",
+      "codex/p4-branding-cache-review-fixes@c52d2cac4ee20474be2679bfd5441cc39541c772"
+    ],
+    "local_verification": {
+      "release_unittest_suite": {
+        "ran": 122,
+        "failures": 0,
+        "errors": 0,
+        "status": "PASS"
+      },
+      "verify_pr_isolation": "PASS",
+      "ruff_check": "PASS",
+      "ruff_format_check": "PASS",
+      "git_diff_check": "PASS"
+    },
+    "ci_runs": {
+      "p0": {
+        "run_id": 46107036950,
+        "job_ids": [140862000476],
+        "event": "pull_request",
+        "conclusion": "success"
+      },
+      "p1": {
+        "run_id": 46107036983,
+        "job_ids": [140862000291],
+        "event": "pull_request",
+        "conclusion": "success"
+      },
+      "p2": {
+        "run_id": 46107036953,
+        "job_ids": [140862000117],
+        "event": "pull_request",
+        "conclusion": "success"
+      },
+      "p3": {
+        "run_id": 46107036957,
+        "job_ids": [140862000159],
+        "event": "pull_request",
+        "conclusion": "success"
+      },
+      "p4_02_pr": {
+        "run_id": 46107037009,
+        "job_ids": [140862000389, 140862124511, 140862124549, 140865044653],
+        "event": "pull_request",
+        "conclusion": "success"
+      },
+      "p4_02_push": {
+        "run_id": 46107033118,
+        "job_ids": [140861987540, 140862064974, 140862064987, 140865841263],
+        "event": "push",
+        "conclusion": "success"
+      },
+      "p4_ghcr_candidate": {
+        "run_id": 46107033037,
+        "job_ids": [140861987517, 140864340349, 140864340383],
+        "event": "push",
+        "conclusion": "success",
+        "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:28ecfca34f240f4adcd9e79b9edbcc9c0f7a808b23ca8bffd3b0d83d72bc0497",
+        "image_id": "sha256:db094520bd9cc24af1e2aaf62f1a6d6c637d8835368e5f26c718e7af5707eedd"
+      }
+    }
+  },
+  "findings": {
+    "F-WC-6CF028E-PR20-LEGACY-P2P3-CHECKS-01": {
+      "related_finding": "F-P4-LEGACY-DEV-PDF-CSS-SSRF-01",
+      "status": "READY_TO_CLOSE_ON_PR20_GREEN",
+      "evidence": "All 5 PR #20 workflows (P0/P1/P2/P3/P4-02) plus push P4-02 and P4 GHCR candidate (G02 clean-site, G03 10-service smoke, full P0-P3 suites, S1) passed on c52d2cac4ee20474be2679bfd5441cc39541c772."
+    },
+    "F-WC-6CF028E-LIVE-NMINUS1-AND-TIER3-DB-STATE-01": {
+      "status": "OPEN_DOCUMENTATION_PREPARED_EXECUTION_EVIDENCE_PENDING",
+      "clone_migration_rollback_executed": false,
+      "capacity_cleared": false
+    }
+  },
+  "candidate_scope": {
+    "superseded_historical_image": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+    "superseded_historical_source": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+    "new_p4_base_candidate_image": "ghcr.io/nobita6986/crm-cskh@sha256:28ecfca34f240f4adcd9e79b9edbcc9c0f7a808b23ca8bffd3b0d83d72bc0497",
+    "new_p4_base_candidate_source": "c52d2cac4ee20474be2679bfd5441cc39541c772",
+    "final_integrated_candidate_required_after_pr19": true
+  },
+  "pr19_overlap_note": "apps/crm_cskh/crm_cskh/services/runtime_cache.py branding cache invalidation from c0f4deb is now integrated on PR #20 (c52d2ca), plus i18n.update_website_context sync. Rebase/retarget PR #19 onto main after PR #20 merges and reconcile Containerfile/release-lock.json tree SHAs.",
+  "execution_limits": {
+    "pr20_merged_to_main": false,
+    "pr19_retargeted": false,
+    "offline_PR18_authorized": false,
+    "official_key_use_authorized": false,
+    "staging_or_production_deployment_authorized": false,
+    "stop_uat_authorized": false,
+    "old_sealed_packs_modified": false
+  }
+}
