@@ -35,6 +35,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from html.parser import HTMLParser
 
 COMPOSE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 REPO_ROOT = COMPOSE_ROOT.parent.parent
@@ -1847,6 +1848,83 @@ finally:
         )
 
 
+def check_crm_branding_reload(
+    status: int | None,
+    body: str,
+    *,
+    phase: str,
+    reload_index: int,
+    favicon: str,
+    logo: str,
+    logger: SmokeLogger,
+    require_prepaint: bool = False,
+    previous_logo: str = "",
+    transport_error: str = "",
+) -> None:
+    """Preserve strict branding checks and capture sanitized diagnostics before reset."""
+    marker_present = 'id="hrpartner-branding-prepaint"' in body
+    failures: list[str] = []
+    if transport_error:
+        failures.append("http_transport_error")
+    else:
+        if status != 200:
+            failures.append("http_status")
+        if f'href="{favicon}"' not in body:
+            failures.append("favicon")
+        if logo not in body or (require_prepaint and not marker_present):
+            failures.append("prepaint_logo")
+        if previous_logo and previous_logo in body:
+            failures.append("previous_logo")
+    if not failures:
+        return
+
+    class IconLinks(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.hrefs: list[str] = []
+
+        def handle_starttag(self, tag: str, attrs) -> None:
+            values = dict(attrs)
+            if tag == "link" and "icon" in (values.get("rel") or "").lower().split():
+                self.hrefs.append(values.get("href") or "")
+
+    links = IconLinks()
+    if body:
+        links.feed(body)
+    if transport_error:
+        raw_error = f"Transport error on /crm/leads: {transport_error}"
+    elif status != 200:
+        raw_error = f"HTTP {status} error on /crm/leads ({', '.join(failures)})"
+    else:
+        raw_error = f"Branding mismatch on HTTP 200 /crm/leads ({', '.join(failures)})"
+
+    detail = logger.scrub(
+        json.dumps(
+            {
+                "phase": phase,
+                "reload_index": reload_index,
+                "http_status": status,
+                "failures": failures,
+                "error": logger.scrub(raw_error),
+                "expected_icon_href": logger.scrub(favicon),
+                "actual_icon_hrefs": [logger.scrub(href) for href in links.hrefs],
+                "prepaint_marker_present": marker_present,
+                "expected_logo_present": bool(body and logo in body),
+                "previous_logo_present": bool(body and previous_logo and previous_logo in body),
+                "body_sha256": (
+                    hashlib.sha256(body.encode("utf-8")).hexdigest()
+                    if not transport_error
+                    else None
+                ),
+            },
+            sort_keys=True,
+        )
+    )
+    logger.assert_clean(detail)
+    logger.info(f"CRM branding reload failed before branding reset: {detail}")
+    raise AssertionError(f"CRM branding reload failed: {detail}")
+
+
 def run_http_and_socketio_smoke(
     project_name: str,
     env_file: pathlib.Path,
@@ -2060,13 +2138,60 @@ def run_http_and_socketio_smoke(
     b_fav_v1 = "/assets/crm_cskh/cskh/logo.svg?fav=smoke-v1"
     b_logo_v2 = "/assets/crm_cskh/cskh/logo.svg?brand=smoke-v2"
     b_fav_v2 = "/assets/crm_cskh/cskh/logo.svg?fav=smoke-v2"
+
+    def _check_crm_leads_reload(
+        *,
+        phase: str,
+        reload_index: int,
+        favicon: str,
+        logo: str,
+        require_prepaint: bool = False,
+        previous_logo: str = "",
+    ) -> None:
+        try:
+            st, _, html = http_call(auth_opener, f"{base_url}/crm/leads", site_name)
+        except Exception as transport_exc:
+            check_crm_branding_reload(
+                None,
+                "",
+                phase=phase,
+                reload_index=reload_index,
+                favicon=favicon,
+                logo=logo,
+                logger=logger,
+                require_prepaint=require_prepaint,
+                previous_logo=previous_logo,
+                transport_error=f"{type(transport_exc).__name__}: {transport_exc}",
+            )
+            raise
+        check_crm_branding_reload(
+            st,
+            html,
+            phase=phase,
+            reload_index=reload_index,
+            favicon=favicon,
+            logo=logo,
+            logger=logger,
+            require_prepaint=require_prepaint,
+            previous_logo=previous_logo,
+        )
+
+    primary_branding_exc: BaseException | None = None
+    active_phase = "v1"
+    active_reload_index = 0
+    active_favicon = b_fav_v1
     try:
         _smoke_set_branding(b_logo_v1, b_fav_v1)
-        for _ in range(6):
-            c1_st, _, c1_html = http_call(auth_opener, f"{base_url}/crm/leads", site_name)
-            assert c1_st == 200 and f'href="{b_fav_v1}"' in c1_html, "Missing favicon v1 on /crm/leads reload"
-            assert 'id="hrpartner-branding-prepaint"' in c1_html and b_logo_v1 in c1_html, (
-                "Missing HRPARTNER prepaint logo v1 on /crm/leads reload"
+        for reload_index in range(1, 7):
+            active_phase = "v1"
+            active_reload_index = reload_index
+            active_favicon = b_fav_v1
+            _check_crm_leads_reload(
+                phase="v1",
+                reload_index=reload_index,
+                favicon=b_fav_v1,
+                logo=b_logo_v1,
+                require_prepaint=True,
             )
             k1_st, _, k1_html = http_call(auth_opener, f"{base_url}/cskh/dashboard", site_name)
             assert (
@@ -2075,23 +2200,57 @@ def run_http_and_socketio_smoke(
                 and 'class="cskh-sidebar-logo is-brand-logo"' in k1_html
             ), "Missing brand logo v1 on /cskh/dashboard"
 
+        active_phase = "v2"
+        active_reload_index = 0
+        active_favicon = b_fav_v2
         _smoke_set_branding(b_logo_v2, b_fav_v2)
-        for _ in range(6):
-            c2_st, _, c2_html = http_call(auth_opener, f"{base_url}/crm/leads", site_name)
-            assert (
-                c2_st == 200
-                and f'href="{b_fav_v2}"' in c2_html
-                and b_logo_v2 in c2_html
-                and b_logo_v1 not in c2_html
-            ), "Stale logo/favicon v1 survived warm reload on /crm/leads"
+        for reload_index in range(1, 7):
+            active_phase = "v2"
+            active_reload_index = reload_index
+            active_favicon = b_fav_v2
+            _check_crm_leads_reload(
+                phase="v2",
+                reload_index=reload_index,
+                favicon=b_fav_v2,
+                logo=b_logo_v2,
+                previous_logo=b_logo_v1,
+            )
             k2_st, _, k2_html = http_call(auth_opener, f"{base_url}/cskh/dashboard", site_name)
             assert (
                 k2_st == 200
                 and f'src="{b_logo_v2}"' in k2_html
                 and b_logo_v1 not in k2_html
             ), "Stale logo v1 survived warm SSR cache on /cskh/dashboard"
+    except BaseException as branding_exc:
+        primary_branding_exc = branding_exc
+        if "CRM branding reload failed:" not in str(branding_exc):
+            fallback_detail = logger.scrub(
+                json.dumps(
+                    {
+                        "phase": active_phase,
+                        "reload_index": active_reload_index,
+                        "http_status": None,
+                        "failures": ["branding_smoke_step_error"],
+                        "error": logger.scrub(f"{type(branding_exc).__name__}: {branding_exc}"),
+                        "expected_icon_href": logger.scrub(active_favicon),
+                    },
+                    sort_keys=True,
+                )
+            )
+            logger.assert_clean(fallback_detail)
+            logger.info(f"CRM branding smoke failed before branding reset: {fallback_detail}")
+        raise
     finally:
-        _smoke_set_branding("", "")
+        if primary_branding_exc is None:
+            _smoke_set_branding("", "")
+        else:
+            try:
+                _smoke_set_branding("", "")
+            except Exception as reset_exc:
+                logger.info(
+                    "CRM branding reset in finally failed after primary error: "
+                    + logger.scrub(f"{type(reset_exc).__name__}: {reset_exc}")
+                )
     kr_st, _, kr_html = http_call(auth_opener, f"{base_url}/cskh/dashboard", site_name)
     assert (
         kr_st == 200 and b_logo_v2 not in kr_html and "is-brand-logo" not in kr_html
