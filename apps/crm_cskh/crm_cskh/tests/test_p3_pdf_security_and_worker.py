@@ -957,35 +957,13 @@ finally:
 
 		with _ephemeral_ssrf_and_redirect_server() as (probe_origin, hits):
 			concurrent_py = r"""
-import json, logging, os, sys, threading
+import faulthandler, gc, json, os, sys, threading
 from concurrent.futures import ThreadPoolExecutor
 
-def _emit_diag(worker_idx: int, engine: str, phase: str) -> None:
-    tid = threading.get_native_id() if hasattr(threading, "get_native_id") else threading.get_ident()
-    line = (
-        json.dumps(
-            {
-                "worker_index": worker_idx,
-                "thread_native_id": tid,
-                "engine": engine,
-                "phase": phase,
-            }
-        )
-        + "\n"
-    ).encode("utf-8")
-    os.write(2, line)
-
-class _DiagStderrHandler(logging.Handler):
-    def emit(self, record: logging.LogRecord) -> None:
-        try:
-            msg = f"[wp-progress] {record.getMessage()}\n".encode("utf-8", "replace")
-            os.write(2, msg)
-        except Exception:
-            pass
-
-_wp_prog = logging.getLogger("weasyprint.progress")
-_wp_prog.setLevel(logging.DEBUG)
-_wp_prog.addHandler(_DiagStderrHandler())
+try:
+    faulthandler.enable(file=sys.stderr, all_threads=True, c_stack=True)
+except TypeError:
+    faulthandler.enable(file=sys.stderr, all_threads=True)
 
 import frappe
 
@@ -996,12 +974,8 @@ os.chdir(sites_dir)
 
 from crm_cskh.services import pdf_hooks
 pdf_hooks.ensure_pdf_runtime_hooks()
-pre_targets = {
-    k: (k in sys.modules)
-    for k in ("cssutils", "weasyprint", "frappe.utils.weasyprint", "frappe.utils.pdf", "pdfkit")
-}
-os.write(2, (json.dumps({"phase": "pre_worker_start", "sys_modules": pre_targets}) + "\n").encode("utf-8"))
 assert "weasyprint" not in sys.modules
+assert "weasyprint.text.fonts" not in sys.modules
 assert "frappe.utils.pdf" not in sys.modules
 assert "cssutils" not in sys.modules
 
@@ -1014,54 +988,45 @@ html_doc = (
 )
 
 def _worker(idx: int) -> dict:
-    engine = "wkhtmltopdf" if idx % 2 == 0 else "weasyprint"
-    _emit_diag(idx, engine, "before_init")
     frappe.init(site=site, sites_path=".")
-    _emit_diag(idx, engine, "after_init")
     frappe.connect()
-    _emit_diag(idx, engine, "after_connect")
     try:
         frappe.set_user("Administrator")
-        _emit_diag(idx, engine, "before_barrier")
         barrier.wait(timeout=15)
-        _emit_diag(idx, engine, "after_barrier")
         if idx % 2 == 0:
-            _emit_diag(idx, engine, "before_engine_import")
             from frappe.utils.pdf import get_pdf
-            _emit_diag(idx, engine, "after_engine_import")
-            _emit_diag(idx, engine, "before_first_render")
             b1 = get_pdf(html_doc)
-            _emit_diag(idx, engine, "after_first_render")
-            _emit_diag(idx, engine, "before_second_render")
             b2 = get_pdf(html_doc)
-            _emit_diag(idx, engine, "after_second_render")
         else:
-            _emit_diag(idx, engine, "before_engine_import")
             from frappe.utils.weasyprint import import_weasyprint
             h_cls, c_cls = import_weasyprint()
-            _emit_diag(idx, engine, "after_engine_import")
-            _emit_diag(idx, engine, "before_first_render")
             b1 = h_cls(string=html_doc).write_pdf(stylesheets=[c_cls(string="@page { size: A4; }")])
-            _emit_diag(idx, engine, "after_first_render")
-            _emit_diag(idx, engine, "before_second_render")
             b2 = h_cls(string=html_doc).write_pdf()
-            _emit_diag(idx, engine, "after_second_render")
         return {
             "ok_first": b1.startswith(b"%PDF-1.") and b"%%EOF" in b1[-128:],
             "ok_second": b2.startswith(b"%PDF-1.") and b"%%EOF" in b2[-128:],
         }
     finally:
-        _emit_diag(idx, engine, "before_destroy")
         frappe.destroy()
-        _emit_diag(idx, engine, "after_destroy")
 
 with ThreadPoolExecutor(max_workers=8) as pool:
     outcomes = list(pool.map(_worker, range(8)))
+
+gc.collect()
+
+import weasyprint
+from weasyprint.text import fonts as wp_fonts
+wp_ver_parts = [int(p) for p in str(getattr(weasyprint, "__version__", "0.0")).split(".")[:2] if p.isdigit()]
+wp_major = wp_ver_parts[0] if wp_ver_parts else 0
+fc_patched = bool(getattr(wp_fonts.FontConfiguration.__init__, "_cskh_fc_double_free_fixed", False))
 
 from crm_cskh.services import pdf_assets
 print("CONC_FIRST_JSON:" + json.dumps({
     "outcomes": outcomes,
     "wrap_install_count": pdf_assets._WRAP_INSTALL_COUNT,
+    "weasyprint_major": wp_major,
+    "fc_double_free_patched": fc_patched,
+    "fc_guard_matches_version": (fc_patched if wp_major < 70 else not fc_patched),
 }))
 """
 			proc = subprocess.run(
@@ -1104,6 +1069,7 @@ print("CONC_FIRST_JSON:" + json.dumps({
 				self.assertTrue(item["ok_first"], payload)
 				self.assertTrue(item["ok_second"], payload)
 			self.assertEqual(payload["wrap_install_count"], 1, payload)
+			self.assertTrue(payload["fc_guard_matches_version"], payload)
 			self.assertEqual(hits, [], f"Concurrent PDF workers leaked SSRF hits: {hits}")
 
 	def test_cssutils_and_print_style_preprocessing_block_import_ssrf_redirects_and_files(self):

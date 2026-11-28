@@ -1394,16 +1394,83 @@ def _patch_frappe_pdf_module(frappe_pdf: Any) -> None:
 		frappe_pdf._cskh_module_patched = True
 
 
+def _build_weasyprint_fc_double_free_patch() -> tuple[Any, Any] | None:
+	"""Prepare Kozea/WeasyPrint#2843 `FontConfiguration.__init__` fix for WeasyPrint < 70.0 outside `_HOOKS_LOCK`."""
+	try:
+		import inspect
+
+		wp_fonts = sys.modules.get("weasyprint.text.fonts")
+		if wp_fonts is None:
+			from weasyprint.text import fonts as wp_fonts  # type: ignore[no-redef]
+	except Exception:
+		return None
+
+	fc_cls = getattr(wp_fonts, "FontConfiguration", None)
+	orig_fc_init = getattr(fc_cls, "__init__", None)
+	if (
+		fc_cls is None
+		or not callable(orig_fc_init)
+		or getattr(orig_fc_init, "_cskh_fc_double_free_fixed", False)
+	):
+		return None
+
+	try:
+		init_src = inspect.getsource(orig_fc_init)
+	except OSError:
+		return None
+
+	before_font_map = init_src.split("self.font_map", 1)[0]
+	required_tokens = (
+		"FcInitLoadConfigAndFonts",
+		"pango_ft2_font_map_new",
+		"pango_fc_font_map_set_config",
+		"self._folder",
+		"self.strut_layouts",
+		"self.font_features",
+	)
+	if (
+		"ffi.gc" not in before_font_map
+		or init_src.count("FcConfigDestroy") < 2
+		or not all(tok in init_src for tok in required_tokens)
+	):
+		return None
+
+	ffi = getattr(wp_fonts, "ffi", None)
+	fontconfig = getattr(wp_fonts, "fontconfig", None)
+	pangoft2 = getattr(wp_fonts, "pangoft2", None)
+	gobject = getattr(wp_fonts, "gobject", None)
+	if any(x is None for x in (ffi, fontconfig, pangoft2, gobject)):
+		return None
+
+	def _safe_font_configuration_init(self) -> None:
+		self._config = fontconfig.FcInitLoadConfigAndFonts()
+		self.font_map = ffi.gc(pangoft2.pango_ft2_font_map_new(), gobject.g_object_unref)
+		pangoft2.pango_fc_font_map_set_config(ffi.cast("PangoFcFontMap *", self.font_map), self._config)
+		fontconfig.FcConfigDestroy(self._config)
+		self._folder = None
+		self.strut_layouts = {}
+		self.font_features = {}
+
+	_safe_font_configuration_init._cskh_fc_double_free_fixed = True  # type: ignore[attr-defined]
+	return fc_cls, _safe_font_configuration_init
+
+
 def _patch_weasyprint_module(weasyprint_mod: Any) -> None:
 	global _ORIG_WP_HTML, _ORIG_WP_CSS, _CACHED_WEASYPRINT_SAFE_FETCHER
 
 	if weasyprint_mod is None or not hasattr(weasyprint_mod, "HTML") or not hasattr(weasyprint_mod, "CSS"):
 		return
 
-	# Build URL fetcher outside `_HOOKS_LOCK` so `from weasyprint.urls import ...` never holds `_HOOKS_LOCK`.
+	# Build URL fetcher and optional WeasyPrint < 70 FontConfiguration patch outside `_HOOKS_LOCK`
+	# so imports never execute while holding `_HOOKS_LOCK`.
 	safe_fetcher = _make_weasyprint_url_fetcher(weasyprint_mod)
+	fc_patch = _build_weasyprint_fc_double_free_patch()
 
 	with _HOOKS_LOCK:
+		if fc_patch is not None:
+			fc_cls, safe_fc_init = fc_patch
+			if not getattr(getattr(fc_cls, "__init__", None), "_cskh_fc_double_free_fixed", False):
+				fc_cls.__init__ = safe_fc_init
 		if _ORIG_WP_HTML is None and not getattr(weasyprint_mod.HTML, "_cskh_pdf_wrapped", False):
 			_ORIG_WP_HTML = weasyprint_mod.HTML
 		if _ORIG_WP_CSS is None and not getattr(weasyprint_mod.CSS, "_cskh_pdf_wrapped", False):
